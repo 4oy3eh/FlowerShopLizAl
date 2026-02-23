@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Склад — FlowerShop{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+
+  {# ── Header ────────────────────────────────────────────────── #}
+  <h1 class="text-lg font-semibold text-gray-800 pt-1">Склад</h1>
+
+  {# ── Summary stats ─────────────────────────────────────────── #}
+  <div class="grid grid-cols-3 gap-2">
+    <div class="bg-white rounded-2xl p-3 text-center shadow-sm border border-gray-100">
+      <div class="text-xl font-bold text-gray-900">{{ varieties|length }}</div>
+      <div class="text-xs text-gray-500 mt-0.5">Сортов</div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 text-center shadow-sm border border-gray-100">
+      <div class="text-xl font-bold text-gray-900">{{ total_available }}</div>
+      <div class="text-xs text-gray-500 mt-0.5">Доступно, шт.</div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 text-center shadow-sm border
+                {% if total_reserved > 0 %}border-amber-200 bg-amber-50{% else %}border-gray-100{% endif %}">
+      <div class="text-xl font-bold
+                  {% if total_reserved > 0 %}text-amber-600{% else %}text-gray-900{% endif %}">
+        {{ total_reserved }}
+      </div>
+      <div class="text-xs mt-0.5
+                  {% if total_reserved > 0 %}text-amber-600{% else %}text-gray-500{% endif %}">
+        В заказах, шт.
+      </div>
+    </div>
+  </div>
+
+  {# ── "Что можно предложить" ────────────────────────────────── #}
+  <a href="/inventory/available"
+     class="flex items-center justify-between bg-green-50 border border-green-200
+            rounded-2xl px-4 py-3 active:bg-green-100 transition">
+    <div>
+      <div class="text-sm font-semibold text-green-800">Что предложить клиенту</div>
+      <div class="text-xs text-green-600 mt-0.5">
+        {% if available %}
+          {{ available|length }} сорт{{ 'а' if available|length in [2,3,4] else ('ов' if available|length > 4 else '') }} · варианты букетов · слоты доставки
+        {% else %}
+          Нет доступных цветов
+        {% endif %}
+      </div>
+    </div>
+    <span class="text-green-500 text-lg leading-none">›</span>
+  </a>
+
+  {# ── Varieties list ─────────────────────────────────────────── #}
+  <div class="space-y-3" id="varieties-list">
+    {% for v in varieties %}
+      {% include 'inventory/_row.html' %}
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{# Single order card.
+   Context variables: o (sqlite3.Row or dict), STATUS_LABELS, STATUS_COLORS,
+   PAYMENT_LABELS, PAYMENT_COLORS — injected by context_processor.
+#}
+<a href="/orders/{{ o['id'] }}"
+   id="order-card-{{ o['id'] }}"
+   class="block bg-white rounded-2xl shadow-sm border border-gray-100
+          p-4 mb-3 active:bg-gray-50 transition">
+
+  {# ── Top row: order number + status badge + payment badge ── #}
+  <div class="flex items-center gap-2 mb-2">
+    <span class="font-bold text-gray-900 text-base">#{{ o['order_number'] }}</span>
+
+    <span class="px-2 py-0.5 rounded-full text-xs font-medium
+                 {{ STATUS_COLORS[o['order_status']] }}">
+      {{ STATUS_LABELS[o['order_status']] }}
+    </span>
+
+    <span class="ml-auto px-2 py-0.5 rounded-full text-xs font-medium
+                 {{ PAYMENT_COLORS[o['payment_status']] }}">
+      {{ PAYMENT_LABELS[o['payment_status']] }}
+    </span>
+  </div>
+
+  {# ── Recipient ── #}
+  <div class="text-sm text-gray-800 mb-1">
+    <span class="font-medium">→ {{ o['recipient_name'] }}</span>
+    <span class="text-gray-400 ml-1 text-xs">{{ o['recipient_phone'] }}</span>
+  </div>
+
+  {# ── Bottom row: delivery type + time + total ── #}
+  <div class="flex items-center gap-3 text-xs text-gray-500 mt-2">
+    {% if o['is_pickup'] %}
+      <span>🏪 Самовывоз</span>
+    {% else %}
+      <span>🚚 Доставка</span>
+    {% endif %}
+
+    {% if o['desired_time'] %}
+      <span>⏰ {{ o['desired_time'] }}</span>
+    {% endif %}
+
+    <span class="ml-auto font-semibold text-gray-900 text-sm">
+      {{ "%.0f"|format(o['total_price']) }} ₴
+    </span>
+  </div>
+</a>

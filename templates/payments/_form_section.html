@@ -1,0 +1,115 @@
+{#
+  Payment form — loaded via HTMX when "Принять оплату" is clicked.
+  Replaces #payment-section (outerHTML swap).
+
+  Required template vars: order
+  Optional: error (str)
+#}
+
+{% set balance = order['total_price'] - order['paid_amount'] %}
+
+<div id="payment-section" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Принять оплату</h2>
+
+  {# ── Summary: Итого / Оплачено / К оплате ── #}
+  <div class="space-y-1 text-sm mb-4 pb-4 border-b border-gray-100">
+    <div class="flex justify-between text-gray-500">
+      <span>Итого</span>
+      <span class="font-medium text-gray-900">{{ "%.0f"|format(order['total_price']) }} ₴</span>
+    </div>
+    <div class="flex justify-between text-gray-500">
+      <span>Оплачено</span>
+      <span class="font-medium text-gray-900">{{ "%.0f"|format(order['paid_amount']) }} ₴</span>
+    </div>
+    <div class="flex justify-between pt-0.5">
+      {% if balance > 0 %}
+        <span class="font-semibold text-red-700">К оплате</span>
+        <span class="font-bold text-lg text-red-700">{{ "%.0f"|format(balance) }} ₴</span>
+      {% elif order['overpayment'] > 0 %}
+        <span class="font-semibold text-teal-700">Переплата</span>
+        <span class="font-bold text-lg text-teal-700">{{ "%.0f"|format(order['overpayment']) }} ₴</span>
+      {% else %}
+        <span class="font-semibold text-green-700">Оплачено ✓</span>
+        <span class="font-bold text-lg text-green-700">0 ₴</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Validation error ── #}
+  {% if error %}
+  <div class="mb-3 px-3 py-2 rounded-xl bg-red-100 text-red-700 text-sm border border-red-200">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  {# ── Payment form ── #}
+  <form hx-post="/payments/add"
+        hx-target="#payment-section"
+        hx-swap="outerHTML">
+
+    <input type="hidden" name="order_id" value="{{ order['id'] }}">
+
+    <div class="space-y-3">
+
+      {# Amount — large, centred, pre-filled with remaining balance #}
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Сумма платежа</label>
+        <input type="number"
+               name="amount"
+               min="0.01"
+               step="1"
+               value="{{ "%.0f"|format(balance) if balance > 0 else '' }}"
+               inputmode="decimal"
+               placeholder="0"
+               required
+               autofocus
+               class="w-full rounded-xl border border-gray-300 text-2xl font-bold px-4 py-3
+                      bg-white focus:outline-none focus:ring-2 focus:ring-green-400 text-center">
+      </div>
+
+      {# Type + Received by — side by side #}
+      <div class="grid grid-cols-2 gap-2">
+
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Тип</label>
+          <select name="payment_type"
+                  class="w-full rounded-xl border border-gray-300 text-base px-3 py-3
+                         bg-white focus:outline-none focus:ring-2 focus:ring-green-400">
+            <option value="cash">💵 Нал</option>
+            <option value="card">💳 Карта</option>
+            <option value="transfer">📲 Перевод</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Принял</label>
+          <input type="text"
+                 name="received_by"
+                 placeholder="Имя"
+                 class="w-full rounded-xl border border-gray-300 text-base px-3 py-3
+                        bg-white focus:outline-none focus:ring-2 focus:ring-green-400">
+        </div>
+
+      </div>
+
+      {# Submit #}
+      <button type="submit"
+              class="w-full py-3.5 rounded-2xl bg-green-600 text-white font-bold text-lg
+                     active:bg-green-700 transition shadow-sm">
+        Принять оплату
+      </button>
+
+      {# Cancel — reloads the section without the form #}
+      <button type="button"
+              hx-get="/orders/{{ order['id'] }}/payments"
+              hx-target="#payment-section"
+              hx-swap="outerHTML"
+              class="w-full py-2.5 rounded-2xl border border-gray-200 text-gray-500
+                     text-sm font-medium active:bg-gray-50 transition">
+        Отмена
+      </button>
+
+    </div>
+  </form>
+
+</div>

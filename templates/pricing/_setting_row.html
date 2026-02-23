@@ -1,0 +1,27 @@
+{#
+  Display row for one system_settings entry (note_price / delivery_price).
+  Required vars: s (system_settings row), SETTING_LABELS (from context processor)
+#}
+
+<div id="setting-row-{{ s['key'] }}"
+     class="flex items-center py-2.5 border-b border-gray-50 last:border-0">
+
+  <div class="flex-1 min-w-0">
+    <div class="font-medium text-gray-800 text-sm">
+      {{ SETTING_LABELS.get(s['key'], s['key']) }}
+    </div>
+  </div>
+
+  <div class="font-bold text-gray-900 text-base mr-3 shrink-0">
+    {{ s['value'] }} ₴
+  </div>
+
+  <button hx-get="/pricing/setting/{{ s['key'] }}/edit"
+          hx-target="#setting-row-{{ s['key'] }}"
+          hx-swap="outerHTML"
+          class="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl
+                 border border-gray-200 text-gray-500 active:bg-gray-50 transition text-base">
+    ✏️
+  </button>
+
+</div>

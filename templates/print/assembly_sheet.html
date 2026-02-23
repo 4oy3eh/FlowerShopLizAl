@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Сборочный лист — Маршрут #{{ route['route_number'] }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      color: #111;
+      padding: 10mm;
+    }
+
+    /* ── Per-order block ─────────────────────────────── */
+    .order-block {
+      max-width: 160mm;
+      margin: 0 auto;
+    }
+    /* Page break before every block except the first */
+    .order-block + .order-block {
+      page-break-before: always;
+      break-before: page;
+      padding-top: 0;
+    }
+
+    /* Block header */
+    .block-label {
+      font-size: 11px;
+      color: #999;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: 2px;
+    }
+    .block-order-num {
+      font-size: 28px;
+      font-weight: 900;
+      color: #111;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+    .block-recipient {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111;
+    }
+    .block-meta {
+      font-size: 12px;
+      color: #666;
+      margin-top: 2px;
+      margin-bottom: 5mm;
+    }
+
+    /* Items table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 5mm;
+    }
+    thead th {
+      text-align: left;
+      font-size: 10px;
+      font-weight: 700;
+      color: #888;
+      text-transform: uppercase;
+      border-bottom: 1px solid #d1d5db;
+      padding-bottom: 3px;
+    }
+    thead th.right { text-align: right; }
+    tbody td {
+      padding: 5px 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 14px;
+    }
+    tbody td.qty {
+      text-align: right;
+      font-size: 22px;
+      font-weight: 900;
+      width: 50px;
+    }
+    tbody td.color {
+      font-size: 11px;
+      color: #9ca3af;
+      padding-left: 6px;
+      width: 80px;
+    }
+
+    /* Meta rows: wrapping / ribbon */
+    .meta-row {
+      font-size: 13px;
+      color: #444;
+      margin-bottom: 3px;
+    }
+    .meta-row strong { color: #111; }
+
+    /* Note box */
+    .note-box {
+      border: 2px dashed #fbbf24;
+      border-radius: 4mm;
+      padding: 3mm 4mm;
+      margin-top: 4mm;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .note-box-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #92400e;
+      letter-spacing: .05em;
+      margin-bottom: 3px;
+    }
+
+    /* Route badge */
+    .route-badge {
+      display: inline-block;
+      background: #f3f4f6;
+      border-radius: 3mm;
+      padding: 1px 6px;
+      font-size: 11px;
+      color: #666;
+      margin-top: 3px;
+    }
+
+    /* ── Print ─────────────────────────────────────────── */
+    @media print {
+      @page { size: A4 portrait; margin: 8mm; }
+      body  { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+
+{% for order in orders %}
+<div class="order-block">
+
+  {# Header #}
+  <div class="block-label">Сборочный лист · Маршрут {{ route['route_number'] }}</div>
+  <div class="block-order-num">#{{ order['order_number'] }}</div>
+  <div class="block-recipient">→ {{ order['recipient_name'] }}</div>
+  <div class="block-meta">
+    <span class="route-badge">Стоп {{ order['route_order'] }}</span>
+    {% if order['desired_time'] %}
+    <span class="route-badge">⏰ {{ order['desired_time'] }}</span>
+    {% endif %}
+  </div>
+
+  {# Flowers table #}
+  <table>
+    <thead>
+      <tr>
+        <th>Сорт</th>
+        <th class="right" style="width:50px">Кол-во</th>
+        <th style="width:80px">Цвет</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set items = order_items[order['id']] %}
+      {% for item in items %}
+      <tr>
+        <td>{{ item['variety_name'] }}</td>
+        <td class="qty">{{ item['quantity'] }}</td>
+        <td class="color">{{ item['variety_color'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# Wrapping & ribbon #}
+  <div class="meta-row">
+    🎁 <strong>Упаковка:</strong> {{ order['wrapping_name'] or 'Без упаковки' }}
+  </div>
+  <div class="meta-row">
+    🎀 <strong>Лента:</strong> {{ order['ribbon_name'] }}
+  </div>
+
+  {# Note #}
+  {% if order['has_note'] and order['note_text'] %}
+  <div class="note-box">
+    <div class="note-box-label">📝 Текст записки</div>
+    {{ order['note_text'] }}
+  </div>
+  {% endif %}
+
+</div>
+{% endfor %}
+
+<script>window.onload = () => window.print();</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+{#
+  Inline edit form for one wrapping option.
+  Required var: w (wrapping_options row)
+#}
+
+<div id="wrapping-row-{{ w['id'] }}"
+     class="py-3 border-b border-gray-50 last:border-0">
+
+  <div class="font-medium text-gray-800 text-sm mb-2">{{ w['name'] }}</div>
+
+  <form hx-post="/pricing/update/wrapping/{{ w['id'] }}"
+        hx-target="#wrapping-row-{{ w['id'] }}"
+        hx-swap="outerHTML"
+        class="flex items-center gap-2">
+
+    <input type="number"
+           name="new_price"
+           value="{{ "%.0f"|format(w['current_price']) }}"
+           min="0"
+           step="1"
+           inputmode="decimal"
+           required
+           autofocus
+           class="w-28 rounded-xl border border-pink-300 text-lg font-bold px-3 py-2
+                  text-center focus:outline-none focus:ring-2 focus:ring-pink-400">
+
+    <span class="text-gray-500 text-sm font-medium">₴</span>
+
+    <button type="submit"
+            class="px-4 py-2 rounded-xl bg-pink-600 text-white text-sm font-semibold
+                   active:bg-pink-700 transition">
+      Сохранить
+    </button>
+
+    <button type="button"
+            hx-get="/pricing/wrapping/{{ w['id'] }}"
+            hx-target="#wrapping-row-{{ w['id'] }}"
+            hx-swap="outerHTML"
+            class="px-3 py-2 rounded-xl border border-gray-200 text-gray-500 text-sm
+                   active:bg-gray-50 transition">
+      ✕
+    </button>
+
+  </form>
+</div>

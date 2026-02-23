@@ -1,0 +1,143 @@
+{#
+  Partial: single courier stop card.
+  Used by:
+    - courier/route.html  ({% include %}, inherits parent context)
+    - HTMX responses      (render_template, receives stop + route_id explicitly)
+
+  Required context variables:
+    stop      — sqlite3.Row with all order + wrapping + ribbon fields
+    route_id  — int, used to build HTMX action URLs
+#}
+
+{% set is_delivered = stop['order_status'] == 'delivered' %}
+{% set has_missed   = 'Не дозвонился' in (stop['notes'] or '') %}
+{% set has_postpone = 'Перенос'        in (stop['notes'] or '') %}
+
+<div id="stop-{{ stop['id'] }}"
+     class="rounded-2xl border shadow-sm overflow-hidden
+            {% if is_delivered %}
+              border-green-200 bg-green-50 opacity-60
+            {% elif has_missed %}
+              border-amber-200 bg-amber-50
+            {% elif has_postpone %}
+              border-blue-200 bg-blue-50
+            {% else %}
+              border-gray-100 bg-white
+            {% endif %}">
+
+  {# ── Top strip: stop № + state badge ───────────────── #}
+  <div class="flex items-center gap-3 px-4 pt-4 pb-2">
+
+    <div class="shrink-0 w-14 h-14 rounded-full flex items-center justify-center
+                text-3xl font-black
+                {% if is_delivered %}bg-green-200 text-green-700
+                {% else %}bg-pink-50 text-pink-600{% endif %}">
+      {{ stop['route_order'] }}
+    </div>
+
+    <div class="flex-1 min-w-0">
+      <div class="text-xs text-gray-400 font-mono">#{{ stop['order_number'] }}</div>
+      {% if stop['desired_time'] %}
+      <div class="text-sm text-gray-500 mt-0.5">⏰ {{ stop['desired_time'] }}</div>
+      {% endif %}
+    </div>
+
+    {# State badge (top-right) #}
+    {% if is_delivered %}
+      <div class="shrink-0 text-green-600 text-3xl font-black">✓</div>
+    {% elif has_missed %}
+      <div class="shrink-0 text-xs font-bold text-amber-600 text-right leading-tight">
+        ✗ Не<br>дозвонился
+      </div>
+    {% elif has_postpone %}
+      <div class="shrink-0 text-xs font-bold text-blue-500 text-right leading-tight">
+        ↺ Перенос
+      </div>
+    {% endif %}
+
+  </div>
+
+  {# ── Main content ────────────────────────────────────── #}
+  <div class="px-4 pb-4 space-y-3">
+
+    {# Address — large, highest priority #}
+    {% if stop['delivery_address'] %}
+    <div class="text-xl font-bold leading-snug
+                {% if is_delivered %}line-through text-gray-400{% else %}text-gray-900{% endif %}">
+      {{ stop['delivery_address'] }}
+    </div>
+    {% endif %}
+
+    {# Recipient name + phone #}
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div class="text-base font-semibold text-gray-800 min-w-0 truncate">
+        {{ stop['recipient_name'] }}
+      </div>
+      <a href="tel:{{ stop['recipient_phone'] }}"
+         class="shrink-0 text-lg font-bold text-blue-600
+                active:text-blue-800 transition">
+        {{ stop['recipient_phone'] }}
+      </a>
+    </div>
+
+    {# Bouquet description #}
+    <div class="text-sm text-gray-500 leading-relaxed">
+      {% if stop['wrapping_name'] %}📦 {{ stop['wrapping_name'] }} · {% endif %}
+      🎀 {{ stop['ribbon_name'] }}
+      {% if stop['has_note'] %} · 📝 Записка{% endif %}
+    </div>
+
+    {# Payment status — big and prominent #}
+    {% set balance = stop['total_price'] - stop['paid_amount'] %}
+    {% if balance > 0 %}
+    <div class="text-3xl font-black text-red-600 leading-none">
+      ДОПЛАТА: {{ '%.0f'|format(balance) }} ₴ ⚠
+    </div>
+    {% else %}
+    <div class="text-xl font-bold text-green-600">ОПЛАЧЕНО ✓</div>
+    {% endif %}
+
+    {# ── Action buttons — hidden only when delivered ─── #}
+    {% if not is_delivered %}
+    <div class="grid grid-cols-2 gap-2 pt-1">
+
+      {# Delivered — full width, green #}
+      <button hx-post="/courier/{{ route_id }}/stop/{{ stop['id'] }}/delivered"
+              hx-target="#stop-{{ stop['id'] }}"
+              hx-swap="outerHTML"
+              class="col-span-2 py-4 rounded-2xl bg-green-600 text-white
+                     text-lg font-black tracking-wide shadow-sm
+                     active:bg-green-700 transition">
+        ✓ Доставлено
+      </button>
+
+      {# Missed #}
+      <button hx-post="/courier/{{ route_id }}/stop/{{ stop['id'] }}/missed"
+              hx-target="#stop-{{ stop['id'] }}"
+              hx-swap="outerHTML"
+              class="py-3 rounded-2xl bg-amber-500 text-white
+                     text-sm font-bold shadow-sm
+                     active:bg-amber-600 transition">
+        ✗ Не дозвонился
+      </button>
+
+      {# Postpone #}
+      <button hx-post="/courier/{{ route_id }}/stop/{{ stop['id'] }}/postpone"
+              hx-target="#stop-{{ stop['id'] }}"
+              hx-swap="outerHTML"
+              class="py-3 rounded-2xl bg-gray-200 text-gray-700
+                     text-sm font-bold shadow-sm
+                     active:bg-gray-300 transition">
+        ↺ Перенос
+      </button>
+
+    </div>
+    {% endif %}
+
+    {# Notes — courier log at bottom #}
+    {% if stop['notes'] %}
+    <div class="text-xs text-gray-400 italic pt-1">{{ stop['notes'] }}</div>
+    {% endif %}
+
+  </div>
+</div>

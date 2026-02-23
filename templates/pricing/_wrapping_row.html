@@ -1,0 +1,25 @@
+{#
+  Display row for one wrapping option.
+  Required var: w (wrapping_options row)
+#}
+
+<div id="wrapping-row-{{ w['id'] }}"
+     class="flex items-center py-2.5 border-b border-gray-50 last:border-0">
+
+  <div class="flex-1 min-w-0">
+    <div class="font-medium text-gray-800 text-sm">{{ w['name'] }}</div>
+  </div>
+
+  <div class="font-bold text-gray-900 text-base mr-3 shrink-0">
+    {{ "%.0f"|format(w['current_price']) }} ₴
+  </div>
+
+  <button hx-get="/pricing/wrapping/{{ w['id'] }}/edit"
+          hx-target="#wrapping-row-{{ w['id'] }}"
+          hx-swap="outerHTML"
+          class="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl
+                 border border-gray-200 text-gray-500 active:bg-gray-50 transition text-base">
+    ✏️
+  </button>
+
+</div>

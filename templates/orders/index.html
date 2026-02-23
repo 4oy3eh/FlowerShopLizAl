@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Заказы — FlowerShop{% endblock %}
+
+{% block content %}
+
+{# ── Page header ── #}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-bold text-gray-900">
+    Заказы
+    <span class="ml-1 text-base font-normal text-gray-400">({{ orders | length }})</span>
+  </h1>
+  <a href="/orders/new"
+     class="px-4 py-2 rounded-xl bg-pink-600 text-white text-sm font-medium
+            active:bg-pink-700 transition">
+    + Новый
+  </a>
+</div>
+
+{# ── Filter form — changes trigger HTMX reload of #orders-list ── #}
+<form id="filter-form"
+      hx-get="/orders/list"
+      hx-target="#orders-list"
+      hx-trigger="change, submit"
+      hx-swap="innerHTML"
+      class="mb-4">
+
+  {# Status filter tabs #}
+  <div class="flex gap-1.5 overflow-x-auto pb-2 mb-3 scrollbar-none">
+    <button type="submit" name="status" value=""
+            class="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition
+                   {% if not status_filter %}bg-pink-600 text-white{% else %}bg-white border border-gray-200 text-gray-600{% endif %}">
+      Все
+    </button>
+    {% for st, label in STATUS_LABELS.items() %}
+      <button type="submit" name="status" value="{{ st }}"
+              class="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition
+                     {% if status_filter == st %}
+                       {{ STATUS_COLORS[st] | replace('bg-', 'bg-') }} font-semibold
+                     {% else %}
+                       bg-white border border-gray-200 text-gray-600
+                     {% endif %}">
+        {{ label }}
+      </button>
+    {% endfor %}
+  </div>
+
+  {# Hidden status field (updated by buttons above via JS) #}
+  <input type="hidden" name="status" id="status-hidden" value="{{ status_filter }}">
+
+  {# Search #}
+  <input type="search" name="q" value="{{ q }}"
+         placeholder="Поиск по номеру, имени, телефону…"
+         hx-get="/orders/list"
+         hx-target="#orders-list"
+         hx-trigger="input changed delay:400ms"
+         hx-include="#filter-form"
+         class="w-full rounded-xl border border-gray-300 text-sm px-4 py-2.5
+                bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
+</form>
+
+{# ── Orders list ── #}
+<div id="orders-list">
+  {% include 'orders/_list.html' %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Status tab buttons write their value into the hidden field then submit
+  document.querySelectorAll('#filter-form button[name="status"]').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      document.getElementById('status-hidden').value = this.value;
+      htmx.trigger('#filter-form', 'submit');
+    });
+  });
+</script>
+{% endblock %}

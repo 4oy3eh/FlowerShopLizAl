@@ -1,0 +1,114 @@
+{#
+  Inline edit form for one tulip variety.
+  Returned by:
+    - GET  /inventory/varieties/<id>/edit
+    - POST /inventory/varieties/<id>/update  (on validation error)
+
+  Expects:
+    v        — sqlite3.Row from tulip_varieties
+    reserved — int, quantity locked in active orders
+    error    — str | None
+#}
+
+<div id="variety-row-{{ v['id'] }}"
+     class="bg-white rounded-2xl p-4 shadow-sm border-2 border-pink-300">
+
+  {# ── Variety name (read-only header) ─────────────────────── #}
+  <div class="flex items-baseline gap-2 mb-4">
+    <span class="font-semibold text-gray-900">{{ v['name'] }}</span>
+    <span class="text-sm text-gray-400">· {{ v['color'] }}</span>
+  </div>
+
+  {# ── Error banner ─────────────────────────────────────────── #}
+  {% if error %}
+  <div class="mb-3 px-3 py-2 rounded-xl bg-red-50 border border-red-200
+              text-sm text-red-700">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  {# ── Edit form ────────────────────────────────────────────── #}
+  <form
+    hx-post="/inventory/varieties/{{ v['id'] }}/update"
+    hx-target="#variety-row-{{ v['id'] }}"
+    hx-swap="outerHTML">
+
+    <div class="space-y-3">
+
+      {# Sell price #}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Цена продажи, ₴
+        </label>
+        <div class="relative">
+          <input
+            type="number"
+            name="current_sell_price"
+            value="{{ v['current_sell_price']|int }}"
+            min="1"
+            step="1"
+            required
+            inputmode="numeric"
+            class="block w-full rounded-xl border border-gray-300 px-3 py-2.5 pr-8
+                   text-sm text-gray-900
+                   focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₴</span>
+        </div>
+        <p class="mt-1 text-xs text-gray-400">
+          Закупочная: {{ v['purchase_price']|int }} ₴ /шт.
+        </p>
+      </div>
+
+      {# Stock total #}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Всего закуплено, шт.
+        </label>
+        <div class="relative">
+          <input
+            type="number"
+            name="stock_total"
+            value="{{ v['stock_total'] }}"
+            min="{{ reserved }}"
+            step="1"
+            required
+            inputmode="numeric"
+            class="block w-full rounded-xl border border-gray-300 px-3 py-2.5 pr-12
+                   text-sm text-gray-900
+                   focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">шт.</span>
+        </div>
+        {% if reserved > 0 %}
+        <p class="mt-1 text-xs text-amber-500">
+          Зарезервировано {{ reserved }} шт. — минимальное значение
+        </p>
+        {% else %}
+        <p class="mt-1 text-xs text-gray-400">
+          Доступно: {{ v['stock_available'] }} шт.
+        </p>
+        {% endif %}
+      </div>
+
+    </div>
+
+    {# ── Buttons ───────────────────────────────────────────── #}
+    <div class="flex gap-2 mt-4 justify-end">
+      <button
+        type="button"
+        hx-get="/inventory/varieties/{{ v['id'] }}/row"
+        hx-target="#variety-row-{{ v['id'] }}"
+        hx-swap="outerHTML"
+        class="px-4 py-2 rounded-xl text-sm font-medium text-gray-600
+               hover:bg-gray-100 transition active:bg-gray-200">
+        Отмена
+      </button>
+      <button
+        type="submit"
+        class="px-4 py-2 rounded-xl text-sm font-medium
+               bg-pink-600 text-white hover:bg-pink-700 transition active:bg-pink-800">
+        Сохранить
+      </button>
+    </div>
+
+  </form>
+</div>

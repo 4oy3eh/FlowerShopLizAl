@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Цены — FlowerShop{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-bold text-gray-900 mb-4">Управление ценами</h1>
+
+{# ══════════════════════════════════════════════════════
+   Массовое изменение цен (PR1)
+   ══════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+    Массовое изменение цен на цветы
+  </h2>
+
+  <form action="/pricing/bulk-update" method="POST">
+    <div class="flex items-center gap-2 flex-wrap">
+
+      <div class="flex items-center gap-1.5">
+        <input type="number"
+               name="percent"
+               value="10"
+               min="0.1"
+               max="200"
+               step="0.5"
+               inputmode="decimal"
+               required
+               class="w-20 rounded-xl border border-gray-300 text-lg font-bold px-3 py-2.5
+                      text-center focus:outline-none focus:ring-2 focus:ring-pink-400">
+        <span class="text-gray-500 font-medium">%</span>
+      </div>
+
+      <button name="direction" value="up"
+              class="flex-1 py-2.5 rounded-xl bg-green-600 text-white font-semibold text-sm
+                     active:bg-green-700 transition text-center">
+        ▲ Поднять все
+      </button>
+
+      <button name="direction" value="down"
+              class="flex-1 py-2.5 rounded-xl bg-red-100 text-red-700 font-semibold text-sm
+                     border border-red-200 active:bg-red-200 transition text-center">
+        ▼ Снизить все
+      </button>
+
+    </div>
+    <p class="text-xs text-gray-400 mt-2">
+      Действие применяется ко всем активным сортам. Существующие заказы не изменятся.
+    </p>
+  </form>
+</div>
+
+{# ══════════════════════════════════════════════════════
+   Цены на цветы
+   ══════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Цветы</h2>
+    <span class="text-xs text-gray-400">{{ varieties|length }} сортов</span>
+  </div>
+
+  {% for v in varieties %}
+    {% include 'pricing/_variety_row.html' %}
+  {% else %}
+    <p class="text-sm text-gray-400">Нет активных сортов</p>
+  {% endfor %}
+</div>
+
+{# ══════════════════════════════════════════════════════
+   Упаковка
+   ══════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Упаковка</h2>
+
+  {% for w in wrappings %}
+    {% include 'pricing/_wrapping_row.html' %}
+  {% else %}
+    <p class="text-sm text-gray-400">Нет упаковок</p>
+  {% endfor %}
+</div>
+
+{# ══════════════════════════════════════════════════════
+   Прочие цены (записка, доставка)
+   ══════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Прочее</h2>
+
+  {% for s in settings %}
+    {% include 'pricing/_setting_row.html' %}
+  {% endfor %}
+</div>
+
+{# ══════════════════════════════════════════════════════
+   История изменений
+   ══════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+    История изменений
+  </h2>
+
+  {% if recent_changes %}
+  <div class="space-y-2">
+    {% for c in recent_changes %}
+    <div class="flex items-start justify-between text-sm py-1.5
+                border-b border-gray-50 last:border-0">
+      <div class="flex-1 min-w-0">
+        <div class="font-medium text-gray-800">
+          {% if c['entity_type'] == 'setting' %}
+            {{ SETTING_LABELS.get(c['entity_name'], c['entity_name']) }}
+          {% else %}
+            {{ c['entity_name'] }}
+          {% endif %}
+        </div>
+        <div class="text-xs text-gray-400 mt-0.5">
+          {{ c['created_at'][5:16].replace('T', ' ') }}
+          {% if c['changed_by'] %} · {{ c['changed_by'] }}{% endif %}
+        </div>
+      </div>
+      <div class="text-right shrink-0 ml-3">
+        <span class="text-gray-400 text-xs line-through">{{ c['old_value'] }} ₴</span>
+        <span class="font-semibold text-gray-900 ml-1">{{ c['new_value'] }} ₴</span>
+        {% set diff = c['new_value']|float - c['old_value']|float %}
+        {% if diff > 0 %}
+          <span class="text-green-700 text-xs ml-1">▲</span>
+        {% elif diff < 0 %}
+          <span class="text-red-700 text-xs ml-1">▼</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-400">Изменений ещё не было</p>
+  {% endif %}
+</div>
+
+{% endblock %}

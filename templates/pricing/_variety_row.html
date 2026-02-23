@@ -1,0 +1,45 @@
+{#
+  Display row for one tulip variety.
+  Used in pricing/index.html (include loop) and returned by GET /pricing/variety/<id>.
+  Required var: v (variety row)
+#}
+
+{% if v['purchase_price'] > 0 %}
+  {% set margin = (((v['current_sell_price'] - v['purchase_price']) / v['purchase_price']) * 100)|round|int %}
+{% else %}
+  {% set margin = 0 %}
+{% endif %}
+
+<div id="variety-row-{{ v['id'] }}"
+     class="flex items-center py-2.5 border-b border-gray-50 last:border-0">
+
+  {# Name + meta #}
+  <div class="flex-1 min-w-0">
+    <div class="font-medium text-gray-800 text-sm">{{ v['name'] }}</div>
+    <div class="text-xs text-gray-400 mt-0.5">
+      закуп {{ "%.0f"|format(v['purchase_price']) }} ₴
+      · {{ v['stock_available'] }} шт.
+    </div>
+  </div>
+
+  {# Sell price + margin #}
+  <div class="text-right mr-3 shrink-0">
+    <div class="font-bold text-gray-900 text-base">{{ "%.0f"|format(v['current_sell_price']) }} ₴</div>
+    <div class="text-xs
+                {% if margin > 100 %}text-green-700
+                {% elif margin > 50 %}text-amber-600
+                {% else %}text-red-700{% endif %}">
+      +{{ margin }}%
+    </div>
+  </div>
+
+  {# Edit button #}
+  <button hx-get="/pricing/variety/{{ v['id'] }}/edit"
+          hx-target="#variety-row-{{ v['id'] }}"
+          hx-swap="outerHTML"
+          class="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl
+                 border border-gray-200 text-gray-500 active:bg-gray-50 transition text-base">
+    ✏️
+  </button>
+
+</div>

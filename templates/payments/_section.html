@@ -1,0 +1,80 @@
+{#
+  Payment section partial — rendered by:
+    - orders/detail.html   (initial page load, via {% include %})
+    - GET  /orders/<id>/payments     (HTMX cancel / refresh)
+    - POST /payments/add             (HTMX after successful payment)
+
+  Required template vars: order, payments, PAYMENT_TYPE_LABELS
+#}
+
+{% set balance = order['total_price'] - order['paid_amount'] %}
+
+<div id="payment-section" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Оплата</h2>
+
+  {# ── Three-column summary ── #}
+  <div class="grid grid-cols-3 gap-2 mb-4 text-center">
+
+    <div class="bg-gray-50 rounded-xl py-2">
+      <div class="text-lg font-bold text-gray-900">{{ "%.0f"|format(order['total_price']) }}</div>
+      <div class="text-xs text-gray-400">Итого ₴</div>
+    </div>
+
+    <div class="bg-gray-50 rounded-xl py-2">
+      <div class="text-lg font-bold text-gray-900">{{ "%.0f"|format(order['paid_amount']) }}</div>
+      <div class="text-xs text-gray-400">Оплачено ₴</div>
+    </div>
+
+    {% if balance > 0 %}
+    <div class="bg-red-100 rounded-xl py-2">
+      <div class="text-lg font-bold text-red-700">{{ "%.0f"|format(balance) }}</div>
+      <div class="text-xs text-gray-400">Доплата ₴</div>
+    </div>
+    {% elif order['overpayment'] > 0 %}
+    <div class="bg-teal-100 rounded-xl py-2">
+      <div class="text-lg font-bold text-teal-700">{{ "%.0f"|format(order['overpayment']) }}</div>
+      <div class="text-xs text-gray-400">Переплата ₴</div>
+    </div>
+    {% else %}
+    <div class="bg-green-100 rounded-xl py-2">
+      <div class="text-lg font-bold text-green-700">✓</div>
+      <div class="text-xs text-green-700">Оплачено</div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── Payment log ── #}
+  {% if payments %}
+  <div class="space-y-2 mb-3">
+    {% for p in payments %}
+    <div class="flex justify-between items-start text-sm">
+      <div>
+        <span class="font-medium text-gray-700">
+          {{ PAYMENT_TYPE_LABELS.get(p['payment_type'], p['payment_type']) }}
+        </span>
+        {% if p['received_by'] %}
+          <span class="text-gray-400 text-xs"> · {{ p['received_by'] }}</span>
+        {% endif %}
+        <div class="text-xs text-gray-400">{{ p['created_at'][5:16].replace('T', ' ') }}</div>
+      </div>
+      <span class="font-semibold text-gray-900 shrink-0">+{{ "%.0f"|format(p['amount']) }} ₴</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-400 mb-3">Платежей нет</p>
+  {% endif %}
+
+  {# ── Accept payment button (hidden for terminal statuses) ── #}
+  {% if order['order_status'] not in ('cancelled', 'done') %}
+  <button hx-get="/orders/{{ order['id'] }}/payment-form"
+          hx-target="#payment-section"
+          hx-swap="outerHTML"
+          class="w-full py-3 rounded-2xl bg-green-600 text-white font-semibold text-base
+                 active:bg-green-700 transition shadow-sm">
+    Принять оплату
+  </button>
+  {% endif %}
+
+</div>

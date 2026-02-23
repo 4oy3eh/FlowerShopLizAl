@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Маршрутный лист #{{ route['route_number'] }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 12px;
+      color: #111;
+      padding: 10mm;
+    }
+
+    /* ── Header ───────────────────────────────────────── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8mm;
+      gap: 10mm;
+    }
+    .header-left h1 {
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+    .header-left .subtitle {
+      font-size: 13px;
+      color: #555;
+      margin-top: 3px;
+    }
+    .header-left .meta {
+      font-size: 12px;
+      color: #777;
+      margin-top: 2px;
+    }
+    .header-right {
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .header-right img {
+      display: block;
+      width: 28mm;
+      height: 28mm;
+    }
+    .header-right .qr-label {
+      font-size: 9px;
+      color: #999;
+      margin-top: 2px;
+    }
+
+    /* ── Table ────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 6mm;
+    }
+    thead th {
+      background: #f3f4f6;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #666;
+      padding: 4px 6px;
+      border: 1px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 5px 6px;
+      border: 1px solid #e5e7eb;
+      vertical-align: top;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    tbody tr:nth-child(even) td {
+      background: #fafafa;
+    }
+
+    /* Column widths */
+    .col-num     { width: 22px;  text-align: center; font-weight: 700; }
+    .col-addr    { width: 28%;  }
+    .col-name    { width: 18%;  }
+    .col-phone   { width: 14%;  white-space: nowrap; }
+    .col-bouquet { width: 22%;  }
+    .col-payment { width: 16%;  text-align: center; }
+
+    /* Payment cell styles */
+    .paid   { color: #16a34a; font-weight: 700; font-size: 13px; }
+    .unpaid { color: #dc2626; font-weight: 700; }
+
+    /* ── Summary footer ───────────────────────────────── */
+    .summary {
+      display: flex;
+      gap: 10mm;
+      font-size: 12px;
+      color: #444;
+      border-top: 2px solid #111;
+      padding-top: 4mm;
+      margin-top: 2mm;
+    }
+    .summary-item strong { color: #111; font-size: 14px; }
+
+    /* ── Print settings ───────────────────────────────── */
+    @media print {
+      @page { size: A4 portrait; margin: 8mm; }
+      body  { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  {# ── Header ──────────────────────────────────────────────────────── #}
+  <div class="header">
+
+    <div class="header-left">
+      <h1>Маршрут #{{ route['route_number'] }}</h1>
+      <div class="subtitle">
+        🌷 FlowerShop · Маршрутный лист
+      </div>
+      <div class="meta">
+        Дата: {{ route['created_at'][:10] }}
+        {% if route['planned_start'] %}
+          &nbsp;·&nbsp; Слот: {{ route['planned_start'] }}
+        {% endif %}
+        &nbsp;·&nbsp; Букетов: {{ route['total_orders'] }}
+      </div>
+    </div>
+
+    {% if qr_url %}
+    <div class="header-right">
+      <img src="{{ qr_url }}" alt="QR маршрута">
+      <div class="qr-label">Google Maps</div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── Stops table ──────────────────────────────────────────────────── #}
+  <table>
+    <thead>
+      <tr>
+        <th class="col-num">#</th>
+        <th class="col-addr">Адрес</th>
+        <th class="col-name">Получатель</th>
+        <th class="col-phone">Телефон</th>
+        <th class="col-bouquet">Описание букета</th>
+        <th class="col-payment">Оплата</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in stops %}
+      <tr>
+        <td class="col-num">{{ s['route_order'] }}</td>
+
+        <td class="col-addr">{{ s['delivery_address'] or '—' }}</td>
+
+        <td class="col-name">{{ s['recipient_name'] }}</td>
+
+        <td class="col-phone">{{ s['recipient_phone'] }}</td>
+
+        <td class="col-bouquet">
+          {% if s['wrapping_name'] %}📦 {{ s['wrapping_name'] }}<br>{% endif %}
+          🎀 {{ s['ribbon_name'] }}
+          {% if s['has_note'] %}<br>📝 Записка{% endif %}
+        </td>
+
+        <td class="col-payment">
+          {% set balance = s['total_price'] - s['paid_amount'] %}
+          {% if balance <= 0 %}
+            <span class="paid">ОПЛАЧЕНО ✓</span>
+          {% else %}
+            <span class="unpaid">ДОПЛАТА<br>{{ "%.0f"|format(balance) }} ₴ ⚠</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# ── Summary ──────────────────────────────────────────────────────── #}
+  {% set total_to_collect = namespace(val=0) %}
+  {% for s in stops %}
+    {% if s['total_price'] - s['paid_amount'] > 0 %}
+      {% set total_to_collect.val = total_to_collect.val + (s['total_price'] - s['paid_amount']) %}
+    {% endif %}
+  {% endfor %}
+
+  <div class="summary">
+    <div class="summary-item">
+      Остановок: <strong>{{ stops|length }}</strong>
+    </div>
+    {% if total_to_collect.val > 0 %}
+    <div class="summary-item">
+      Собрать доплат: <strong>{{ "%.0f"|format(total_to_collect.val) }} ₴</strong>
+    </div>
+    {% else %}
+    <div class="summary-item">
+      Все заказы оплачены ✓
+    </div>
+    {% endif %}
+  </div>
+
+  <script>window.onload = () => window.print();</script>
+</body>
+</html>

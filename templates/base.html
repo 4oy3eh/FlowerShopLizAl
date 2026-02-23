@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <!--
+    viewport-fit=cover — required for env(safe-area-inset-bottom) on iPhone X+.
+    Without it the bottom nav overlaps the home indicator.
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#db2777">
+  <title>{% block title %}FlowerShop{% endblock %}</title>
+
+  <!-- Tailwind Play CDN — no build step needed -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+
+  <!--
+    Safelist dynamic Jinja2 classes so the Play CDN always generates them,
+    even on pages where the conditional branch isn't rendered.
+  -->
+  <script>
+    tailwind.config = {
+      safelist: [
+        // nav / flash
+        'text-pink-600','text-pink-700','text-pink-500',
+        'bg-pink-50','border-pink-200','border-pink-300',
+        'text-amber-600','bg-amber-50','border-amber-200',
+        'text-green-600','bg-green-50','border-green-200',
+        'text-rose-600','text-rose-700','bg-rose-50','border-rose-200',
+        // inventory: stock bar fill colours
+        'bg-green-500','bg-amber-400','bg-red-400',
+        // inventory: percentage text colours
+        'text-amber-500','text-red-500',
+        // order status badges
+        'bg-blue-100','text-blue-700',
+        'bg-amber-100','text-amber-700',
+        'bg-violet-100','text-violet-700',
+        'bg-green-100','text-green-700',
+        'bg-orange-100','text-orange-700',
+        'bg-teal-100','text-teal-700',
+        'bg-gray-100','text-gray-600',
+        'bg-red-100','text-red-700',
+        // payment section & form
+        'bg-green-600','active:bg-green-700',
+        'text-green-700','text-red-700','text-teal-700',
+        'border-red-200',
+        // pricing
+        'active:bg-red-200',
+        // courier view
+        'line-through','opacity-60',
+        'border-blue-200','text-blue-500','text-blue-600',
+        'bg-amber-500','active:bg-amber-600',
+        'bg-gray-200','active:bg-gray-300',
+        'active:bg-green-700',
+      ]
+    }
+  </script>
+
+  {% block head %}{% endblock %}
+</head>
+
+<!--
+  Layout:
+    Mobile  → content scrolls freely; fixed bottom nav h-16 + safe-area
+    Desktop → fixed top nav h-14; content starts below it
+  pb-24 on mobile = 16 (nav) + 8 (breathing room) = clears bottom nav + safe area
+-->
+<body class="bg-gray-50 text-gray-900 antialiased
+             min-h-screen
+             pb-24 md:pb-6 md:pt-14">
+
+  {# ── Active-route flags (used by both navbars) ────────────────────── #}
+  {% set p = request.path %}
+  {% set is_orders    = p.startswith('/orders') and not p.startswith('/orders/new') %}
+  {% set is_new       = p.startswith('/orders/new') %}
+  {% set is_inventory = p.startswith('/inventory') %}
+  {% set is_routes    = p.startswith('/routes') or p.startswith('/courier') %}
+  {% set is_payments  = p.startswith('/payments') %}
+
+  {# ── Desktop: top navigation ──────────────────────────────────────── #}
+  <header class="hidden md:flex fixed inset-x-0 top-0 z-40 h-14
+                 bg-white border-b border-gray-200 shadow-sm
+                 items-center px-6 gap-1">
+
+    <a href="/" class="mr-5 font-semibold text-pink-600 text-base shrink-0
+                        hover:text-pink-700 transition">
+      🌷 FlowerShop
+    </a>
+
+    <a href="/orders"
+       class="px-3 py-1.5 rounded-md text-sm font-medium transition
+              {% if is_orders %}bg-pink-50 text-pink-700{% else %}text-gray-600 hover:bg-gray-100{% endif %}">
+      Заказы
+    </a>
+
+    <a href="/orders/new"
+       class="px-4 py-1.5 rounded-md text-sm font-medium transition
+              bg-pink-600 text-white hover:bg-pink-700 ml-1">
+      + Новый
+    </a>
+
+    <a href="/inventory"
+       class="px-3 py-1.5 rounded-md text-sm font-medium transition
+              {% if is_inventory %}bg-pink-50 text-pink-700{% else %}text-gray-600 hover:bg-gray-100{% endif %}">
+      Склад
+    </a>
+
+    <a href="/routes"
+       class="px-3 py-1.5 rounded-md text-sm font-medium transition
+              {% if is_routes %}bg-pink-50 text-pink-700{% else %}text-gray-600 hover:bg-gray-100{% endif %}">
+      Маршруты
+    </a>
+
+    <a href="/payments"
+       class="px-3 py-1.5 rounded-md text-sm font-medium transition
+              {% if is_payments %}bg-pink-50 text-pink-700{% else %}text-gray-600 hover:bg-gray-100{% endif %}">
+      ₴ Оплаты
+    </a>
+
+  </header>
+
+  {# ── Page content ──────────────────────────────────────────────────── #}
+  <main class="max-w-2xl mx-auto px-4 py-4">
+
+    {# Flash messages #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="mb-3 px-4 py-2.5 rounded-xl text-sm font-medium
+                    {% if category == 'error' %}
+                      bg-red-50 text-red-700 border border-red-200
+                    {% elif category == 'warning' %}
+                      bg-amber-50 text-amber-700 border border-amber-200
+                    {% else %}
+                      bg-green-50 text-green-700 border border-green-200
+                    {% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+
+  </main>
+
+  {# ── Mobile: bottom navigation ─────────────────────────────────────── #}
+  <!--
+    style="padding-bottom: env(safe-area-inset-bottom)" adds the home-indicator
+    clearance on iPhone X/11/12/... (works only when viewport-fit=cover is set).
+  -->
+  <nav class="md:hidden fixed inset-x-0 bottom-0 z-40
+              bg-white border-t border-gray-200
+              shadow-[0_-2px_12px_rgba(0,0,0,0.07)]"
+       style="padding-bottom: env(safe-area-inset-bottom)">
+
+    <div class="flex h-16">
+
+      {# Заказы #}
+      <a href="/orders"
+         class="flex-1 flex flex-col items-center justify-center gap-0.5
+                text-xs transition active:bg-gray-50
+                {% if is_orders %}text-pink-600{% else %}text-gray-500{% endif %}">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+          <rect x="9" y="3" width="6" height="4" rx="1"/>
+          <path d="M9 12h6M9 16h4"/>
+        </svg>
+        <span>Заказы</span>
+      </a>
+
+      {# Новый — визуально выделен как центральная кнопка #}
+      <a href="/orders/new"
+         class="flex-1 flex flex-col items-center justify-center gap-1
+                text-xs transition active:bg-pink-50">
+        <span class="flex items-center justify-center
+                     w-11 h-11 rounded-full
+                     bg-pink-600 text-white text-2xl font-light shadow-md
+                     {% if is_new %}ring-2 ring-pink-300{% endif %}
+                     active:bg-pink-700">
+          +
+        </span>
+        <span class="{% if is_new %}text-pink-700 font-medium{% else %}text-pink-500{% endif %}">
+          Новый
+        </span>
+      </a>
+
+      {# Склад #}
+      <a href="/inventory"
+         class="flex-1 flex flex-col items-center justify-center gap-0.5
+                text-xs transition active:bg-gray-50
+                {% if is_inventory %}text-pink-600{% else %}text-gray-500{% endif %}">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+          <line x1="12" y1="22.08" x2="12" y2="12"/>
+        </svg>
+        <span>Склад</span>
+      </a>
+
+      {# Маршруты #}
+      <a href="/routes"
+         class="flex-1 flex flex-col items-center justify-center gap-0.5
+                text-xs transition active:bg-gray-50
+                {% if is_routes %}text-pink-600{% else %}text-gray-500{% endif %}">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+          <line x1="8" y1="2" x2="8" y2="18"/>
+          <line x1="16" y1="6" x2="16" y2="22"/>
+        </svg>
+        <span>Маршруты</span>
+      </a>
+
+      {# Оплаты #}
+      <a href="/payments"
+         class="flex-1 flex flex-col items-center justify-center gap-0.5
+                text-xs transition active:bg-gray-50
+                {% if is_payments %}text-pink-600{% else %}text-gray-500{% endif %}">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+          <line x1="1" y1="10" x2="23" y2="10"/>
+        </svg>
+        <span>₴ Оплаты</span>
+      </a>
+
+    </div>
+  </nav>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

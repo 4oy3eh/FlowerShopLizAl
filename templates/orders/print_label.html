@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Бирка #{{ order['order_number'] }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 12mm 10mm;
+      max-width: 80mm;
+    }
+    .order-num { font-size: 28px; font-weight: 900; color: #111; margin-bottom: 6px; }
+    .recipient { font-size: 22px; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .address   { font-size: 14px; color: #444; margin-bottom: 4px; }
+    .time      { font-size: 14px; color: #666; margin-bottom: 10px; }
+    .divider   { border: none; border-top: 2px dashed #ccc; margin: 10px 0; }
+    .balance-label { font-size: 13px; color: #666; }
+    .balance-amount {
+      font-size: 32px; font-weight: 900;
+      color: {% if order['total_price'] - order['paid_amount'] > 0 %}#dc2626{% else %}#16a34a{% endif %};
+    }
+    @media print {
+      @page { margin: 0; }
+      body { padding: 8mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="order-num">#{{ order['order_number'] }}</div>
+
+  <div class="recipient">→ {{ order['recipient_name'] }}</div>
+
+  {% if order['is_pickup'] %}
+    <div class="address">🏪 Самовывоз</div>
+  {% else %}
+    <div class="address">{{ order['delivery_address'] }}</div>
+  {% endif %}
+
+  {% if order['desired_time'] %}
+    <div class="time">⏰ {{ order['desired_time'] }}</div>
+  {% endif %}
+
+  <hr class="divider">
+
+  {% set balance = order['total_price'] - order['paid_amount'] %}
+  {% if balance > 0 %}
+    <div class="balance-label">ДОПЛАТА</div>
+    <div class="balance-amount">{{ "%.0f"|format(balance) }} ₴ ⚠</div>
+  {% else %}
+    <div class="balance-label">ОПЛАЧЕН</div>
+    <div class="balance-amount">✓</div>
+  {% endif %}
+
+  <script>window.onload = () => window.print();</script>
+</body>
+</html>

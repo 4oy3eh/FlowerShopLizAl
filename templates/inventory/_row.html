@@ -1,0 +1,81 @@
+{#
+  Display card for one tulip variety.
+  Used in:
+    - templates/inventory/index.html  (via {% include %})
+    - routes/inventory.py variety_row() and update_variety() as HTMX response
+
+  Expects: v  — sqlite3.Row from tulip_varieties
+#}
+
+{% set pct = ((v['stock_available'] / v['stock_total']) * 100) | round | int
+             if v['stock_total'] > 0 else 0 %}
+
+{% if pct > 50 %}
+  {% set bar_color = 'bg-green-500' %}
+  {% set pct_color = 'text-green-600' %}
+{% elif pct > 20 %}
+  {% set bar_color = 'bg-amber-400' %}
+  {% set pct_color = 'text-amber-500' %}
+{% elif pct > 0 %}
+  {% set bar_color = 'bg-red-400' %}
+  {% set pct_color = 'text-red-500' %}
+{% else %}
+  {% set bar_color = 'bg-gray-300' %}
+  {% set pct_color = 'text-gray-400' %}
+{% endif %}
+
+<div id="variety-row-{{ v['id'] }}"
+     class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+
+  {# ── Name + price row ────────────────────────────────────── #}
+  <div class="flex items-start justify-between gap-2">
+    <div class="min-w-0">
+      <div class="font-semibold text-gray-900 leading-tight truncate">{{ v['name'] }}</div>
+      <div class="text-xs text-gray-400 mt-0.5">{{ v['color'] }}</div>
+    </div>
+    <div class="text-right shrink-0">
+      <div class="font-bold text-gray-900">{{ v['current_sell_price']|int }} ₴</div>
+      <div class="text-xs text-gray-400">куп. {{ v['purchase_price']|int }} ₴</div>
+    </div>
+  </div>
+
+  {# ── Stock bar ────────────────────────────────────────────── #}
+  <div class="mt-3 space-y-1.5">
+    <div class="flex justify-between items-baseline">
+      <div class="flex items-baseline gap-1">
+        {% if v['stock_available'] == 0 %}
+          <span class="text-sm font-medium text-gray-400">Нет в наличии</span>
+        {% else %}
+          <span class="text-sm font-semibold {{ pct_color }}">{{ v['stock_available'] }}</span>
+          <span class="text-xs text-gray-400">/ {{ v['stock_total'] }} шт.</span>
+        {% endif %}
+      </div>
+      <span class="text-xs font-medium {{ pct_color }}">{{ pct }}%</span>
+    </div>
+
+    {# Progress bar #}
+    <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div class="h-full rounded-full transition-all duration-300 {{ bar_color }}"
+           style="width: {{ pct }}%"></div>
+    </div>
+
+    {# Reserved info — only show if anything is reserved #}
+    {% set reserved = v['stock_total'] - v['stock_available'] %}
+    {% if reserved > 0 %}
+    <div class="text-xs text-amber-500">{{ reserved }} шт. в заказах</div>
+    {% endif %}
+  </div>
+
+  {# ── Edit button ──────────────────────────────────────────── #}
+  <div class="mt-3 flex justify-end">
+    <button
+      hx-get="/inventory/varieties/{{ v['id'] }}/edit"
+      hx-target="#variety-row-{{ v['id'] }}"
+      hx-swap="outerHTML"
+      class="text-xs font-medium text-blue-600 hover:text-blue-700
+             px-3 py-1.5 rounded-lg hover:bg-blue-50 transition active:bg-blue-100">
+      Изменить
+    </button>
+  </div>
+
+</div>

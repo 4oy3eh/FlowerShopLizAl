@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Сборочный лист #{{ order['order_number'] }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 12mm 10mm;
+      max-width: 120mm;
+    }
+    h1    { font-size: 16px; color: #888; font-weight: 500; margin-bottom: 4px; }
+    h2    { font-size: 24px; font-weight: 900; color: #111; margin-bottom: 2px; }
+    .sub  { font-size: 14px; color: #555; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+    th    { text-align: left; font-size: 12px; color: #888; font-weight: 500;
+            border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+    td    { padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 15px; }
+    td.qty { text-align: right; font-size: 20px; font-weight: 700; color: #111;
+              width: 60px; }
+    .meta { font-size: 14px; color: #555; margin-bottom: 6px; }
+    .meta strong { color: #111; }
+    .note-box {
+      border: 2px dashed #fbbf24;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 12px;
+      font-size: 14px;
+      color: #111;
+    }
+    .note-label { font-size: 12px; color: #888; font-weight: 600;
+                  text-transform: uppercase; margin-bottom: 4px; }
+    @media print {
+      @page { margin: 0; }
+      body { padding: 8mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Сборочный лист</h1>
+  <h2>#{{ order['order_number'] }}</h2>
+  <div class="sub">→ {{ order['recipient_name'] }}</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Сорт</th>
+        <th style="text-align:right">Кол-во</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item['variety_name'] }}
+            <span style="color:#9ca3af; font-size:12px"> ({{ item['variety_color'] }})</span>
+        </td>
+        <td class="qty">{{ item['quantity'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="meta">
+    🎁 <strong>Упаковка:</strong> {{ order['wrapping_name'] or 'Без упаковки' }}
+  </div>
+  <div class="meta">
+    🎀 <strong>Лента:</strong> {{ order['ribbon_name'] }}
+  </div>
+
+  {% if order['has_note'] and order['note_text'] %}
+  <div class="note-box">
+    <div class="note-label">📝 Записка</div>
+    {{ order['note_text'] }}
+  </div>
+  {% endif %}
+
+  <script>window.onload = () => window.print();</script>
+</body>
+</html>

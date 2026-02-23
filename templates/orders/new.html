@@ -1,0 +1,936 @@
+{% extends "base.html" %}
+{% block title %}Новый заказ{% endblock %}
+
+{% block head %}
+<script>
+  tailwind.config.safelist = (tailwind.config.safelist || []).concat([
+    'bg-green-500',  /* step "done" circle — only set via JS */
+  ]);
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto">
+
+  {# ── Page title ──────────────────────────────────────────────────── #}
+  <h1 class="text-xl font-bold text-gray-800 mb-5">Новый заказ</h1>
+
+  {# ── Step indicator ──────────────────────────────────────────────── #}
+  {#
+    Circles are siblings of connectors inside a flex row.
+    `mb-4` on connectors compensates for the label row below circles
+    so the horizontal line aligns with circle centers.
+  #}
+  <div class="flex items-center mb-6">
+
+    <div class="flex flex-col items-center shrink-0">
+      <div id="step-ind-1"
+           class="w-9 h-9 rounded-full flex items-center justify-center
+                  text-sm font-bold bg-pink-600 text-white">1</div>
+      <span id="step-lbl-1" class="text-xs mt-1 text-pink-600 font-medium">Клиент</span>
+    </div>
+
+    <div id="conn-1-2" class="flex-1 h-0.5 bg-gray-300 mb-4 mx-1"></div>
+
+    <div class="flex flex-col items-center shrink-0">
+      <div id="step-ind-2"
+           class="w-9 h-9 rounded-full flex items-center justify-center
+                  text-sm font-bold bg-gray-200 text-gray-500">2</div>
+      <span id="step-lbl-2" class="text-xs mt-1 text-gray-400">Букет</span>
+    </div>
+
+    <div id="conn-2-3" class="flex-1 h-0.5 bg-gray-300 mb-4 mx-1"></div>
+
+    <div class="flex flex-col items-center shrink-0">
+      <div id="step-ind-3"
+           class="w-9 h-9 rounded-full flex items-center justify-center
+                  text-sm font-bold bg-gray-200 text-gray-500">3</div>
+      <span id="step-lbl-3" class="text-xs mt-1 text-gray-400">Итог</span>
+    </div>
+
+  </div>{# step indicator #}
+
+  {# ── Form (all steps live in one <form>) ─────────────────────────── #}
+  <form id="order-form" method="POST" action="/orders/create"
+        autocomplete="off">
+
+    {# ── STEP 1: Customer + Recipient ──────────────────────────────── #}
+    <div data-step="1">
+
+      {# Validation error banner #}
+      <div id="step1-error"
+           class="hidden mb-4 px-4 py-2.5 rounded-xl text-sm
+                  bg-red-50 text-red-700 border border-red-200">
+      </div>
+
+      {# ---- Customer ---- #}
+      <div class="mb-6">
+        <h2 class="text-base font-semibold text-gray-700 mb-3">Заказчик</h2>
+
+        {# Customer phone #}
+        <div class="mb-4">
+          <label class="block text-sm text-gray-600 mb-1.5"
+                 for="customer-phone-input">
+            Телефон заказчика
+          </label>
+          <input
+            type="tel"
+            id="customer-phone-input"
+            name="customer_phone"
+            inputmode="tel"
+            placeholder="+380"
+            class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3.5
+                   bg-white focus:outline-none focus:ring-2 focus:ring-pink-400"
+            oninput="formatPhone(this)"
+            hx-get="/orders/customer-lookup"
+            hx-trigger="blur"
+            hx-target="#customer-lookup-result"
+            hx-include="this"
+          >
+          {# HTMX injects hint here; also used as OOB swap anchor for name input #}
+          <div id="customer-lookup-result" class="mt-1 min-h-[20px]"></div>
+        </div>
+
+        {# Customer name — pre-filled via HTMX OOB when customer is found #}
+        <div class="mb-1">
+          <label class="block text-sm text-gray-600 mb-1.5"
+                 for="customer-name-input">
+            Имя заказчика
+          </label>
+          <input
+            type="text"
+            id="customer-name-input"
+            name="customer_name"
+            placeholder="Аноним"
+            class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3.5
+                   bg-white focus:outline-none focus:ring-2 focus:ring-pink-400"
+          >
+        </div>
+      </div>{# /customer #}
+
+      {# ---- Recipient ---- #}
+      <div class="mb-6">
+        <h2 class="text-base font-semibold text-gray-700 mb-3">Получатель</h2>
+
+        {# Recipient phone #}
+        <div class="mb-4">
+          <label class="block text-sm text-gray-600 mb-1.5"
+                 for="recipient-phone-input">
+            Телефон получателя
+            <span class="text-red-500 ml-0.5">*</span>
+          </label>
+          <input
+            type="tel"
+            id="recipient-phone-input"
+            name="recipient_phone"
+            inputmode="tel"
+            placeholder="+380"
+            class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3.5
+                   bg-white focus:outline-none focus:ring-2 focus:ring-pink-400"
+            oninput="formatPhone(this)"
+          >
+        </div>
+
+        {# Recipient name #}
+        <div class="mb-1">
+          <label class="block text-sm text-gray-600 mb-1.5"
+                 for="recipient-name-input">
+            Имя получателя
+            <span class="text-red-500 ml-0.5">*</span>
+          </label>
+          <input
+            type="text"
+            id="recipient-name-input"
+            name="recipient_name"
+            placeholder="Мария"
+            class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3.5
+                   bg-white focus:outline-none focus:ring-2 focus:ring-pink-400"
+          >
+        </div>
+      </div>{# /recipient #}
+
+      {# ---- Delivery vs Pickup ---- #}
+      <div class="mb-6">
+        <h2 class="text-base font-semibold text-gray-700 mb-3">Способ получения</h2>
+
+        {# Toggle — Delivery is selected by default #}
+        <div class="flex rounded-xl overflow-hidden border border-gray-300 mb-4">
+          <button
+            type="button"
+            id="btn-delivery"
+            onclick="setPickup(false)"
+            class="flex-1 py-3.5 text-base font-medium transition
+                   bg-pink-600 text-white"
+          >Доставка</button>
+          <button
+            type="button"
+            id="btn-pickup"
+            onclick="setPickup(true)"
+            class="flex-1 py-3.5 text-base font-medium transition
+                   bg-white text-gray-600"
+          >Самовывоз</button>
+        </div>
+        <input type="hidden" name="is_pickup" id="is_pickup_input" value="0">
+
+        {# Delivery address — hidden when Pickup is selected #}
+        <div id="delivery-fields">
+          <label class="block text-sm text-gray-600 mb-1.5">Адрес доставки</label>
+          <textarea
+            name="delivery_address"
+            rows="2"
+            placeholder="Улица, дом, кв."
+            class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3
+                   bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                   resize-none"
+          ></textarea>
+        </div>
+      </div>{# /delivery #}
+
+      {# ---- Desired time ---- #}
+      <div class="mb-8">
+        <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+          Желаемое время
+        </label>
+        <div class="relative">
+          <select
+            name="desired_time"
+            class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3.5
+                   bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                   appearance-none pr-10"
+          >
+            <option value="">Не указано</option>
+            {% for slot in time_slots %}
+            <option value="{{ slot }}">{{ slot }}</option>
+            {% endfor %}
+          </select>
+          {# Custom chevron #}
+          <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+            <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {# Next button #}
+      <button
+        type="button"
+        onclick="goToStep2()"
+        class="w-full py-4 rounded-xl bg-pink-600 text-white text-lg font-semibold
+               active:bg-pink-700 transition"
+      >
+        Далее — Букет →
+      </button>
+
+    </div>{# /step-1 #}
+
+
+    {# ── STEP 2: Bouquet composition ──────────────────────────────── #}
+    <div data-step="2" class="hidden">
+
+      {# Validation error banner #}
+      <div id="step2-error"
+           class="hidden mb-4 px-4 py-2.5 rounded-xl text-sm
+                  bg-red-50 text-red-700 border border-red-200">
+      </div>
+
+      {# ---- Variety rows ---- #}
+      <div class="mb-2">
+        <h2 class="text-base font-semibold text-gray-700 mb-3">
+          Цветы <span class="text-red-500">*</span>
+        </h2>
+
+        <div id="variety-rows">
+          {# Initial row (rendered by Jinja2; subsequent rows cloned by JS) #}
+          <div class="variety-row rounded-xl border border-gray-200 bg-white p-3 mb-2">
+            <div class="flex gap-2 mb-2">
+              <div class="relative flex-1 min-w-0">
+                <select name="variety_id[]"
+                        class="w-full rounded-lg border border-gray-200 text-base px-3 py-2.5
+                               bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
+                               focus:ring-pink-400 appearance-none pr-8"
+                        onchange="onVarietyChange(this)">
+                  <option value="">Выберите сорт</option>
+                  {% for v in varieties %}
+                  <option value="{{ v.id }}"
+                          data-price="{{ v.current_sell_price }}"
+                          data-stock="{{ v.stock_available }}">
+                    {{ v.name }} — {{ v.current_sell_price | int }} ₴
+                    &nbsp;({{ v.stock_available }} шт.)
+                  </option>
+                  {% endfor %}
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                  <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24"
+                       stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </div>
+              </div>
+              {# Remove button: invisible when only 1 row #}
+              <button type="button" onclick="removeRow(this)"
+                      class="remove-row invisible shrink-0 w-9 h-9 flex items-center
+                             justify-center rounded-lg text-gray-300
+                             hover:text-red-400 hover:bg-red-50 transition text-lg">
+                ✕
+              </button>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-sm text-gray-500 shrink-0">Количество:</span>
+              <input type="number" name="quantity[]" value="1" min="1"
+                     class="w-20 rounded-lg border border-gray-200 text-base px-3 py-2
+                            bg-gray-50 text-center focus:bg-white focus:outline-none
+                            focus:ring-2 focus:ring-pink-400"
+                     oninput="onQtyChange(this)">
+              <span class="text-gray-400 shrink-0">=</span>
+              <span class="row-price font-semibold text-gray-800 shrink-0">— ₴</span>
+            </div>
+            <div class="row-stock-warn hidden mt-1.5 text-xs text-red-600 font-medium"></div>
+          </div>
+        </div>{# /variety-rows #}
+
+        <button type="button" onclick="addVarietyRow()"
+                class="w-full py-3 rounded-xl border-2 border-dashed border-pink-200
+                       text-pink-500 font-medium text-sm mb-6
+                       active:bg-pink-50 transition">
+          + Добавить сорт
+        </button>
+      </div>{# /flowers section #}
+
+      {# ---- Wrapping ---- #}
+      <div class="mb-4">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Упаковка</label>
+        <div class="relative">
+          <select name="wrapping_id" id="wrapping-select"
+                  class="w-full rounded-xl border border-gray-300 text-base px-4 py-3.5
+                         bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                         appearance-none pr-10"
+                  onchange="recalcTotal()">
+            <option value="" data-price="0">Без упаковки — 0 ₴</option>
+            {% for w in wrapping %}
+            <option value="{{ w.id }}" data-price="{{ w.current_price }}">
+              {{ w.name }} — {{ w.current_price | int }} ₴
+            </option>
+            {% endfor %}
+          </select>
+          <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+            <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {# ---- Ribbon (required — V2) ---- #}
+      <div class="mb-6">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          Лента <span class="text-red-500">*</span>
+        </label>
+        <div class="relative">
+          <select name="ribbon_color_id" id="ribbon-select"
+                  class="w-full rounded-xl border border-gray-300 text-base px-4 py-3.5
+                         bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                         appearance-none pr-10">
+            <option value="">Выберите цвет</option>
+            {% for r in ribbons %}
+            <option value="{{ r.id }}">{{ r.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+            <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {# ---- Note (has_note + note_text — V4) ---- #}
+      <div class="mb-6">
+        <label class="flex items-center gap-3 cursor-pointer select-none">
+          <input type="checkbox" id="has-note-cb" name="has_note" value="1"
+                 onchange="toggleNote()"
+                 class="w-5 h-5 rounded accent-pink-600 shrink-0">
+          <span class="text-sm font-semibold text-gray-700">Добавить записку</span>
+          <span class="text-xs text-gray-400 ml-auto">
+            +{{ settings.note_price | int }} ₴
+          </span>
+        </label>
+        <div id="note-fields" class="hidden mt-3">
+          <textarea name="note_text" rows="3"
+                    placeholder="Текст записки — будет написан от руки и вложен в букет…"
+                    class="w-full rounded-xl border border-gray-300 text-base px-4 py-3
+                           bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                           resize-none">
+          </textarea>
+        </div>
+      </div>
+
+      {# ---- Price summary (live-updated by JS) ---- #}
+      <div class="mb-6 rounded-xl bg-pink-50 border border-pink-100 p-4">
+        <h3 class="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+          Предварительная стоимость
+        </h3>
+        <div class="space-y-1.5 text-sm">
+          <div class="flex justify-between text-gray-600">
+            <span>Цветы</span>
+            <span><span id="sum-flowers">0</span> ₴</span>
+          </div>
+          <div class="flex justify-between text-gray-600">
+            <span>Упаковка</span>
+            <span><span id="sum-wrapping">0</span> ₴</span>
+          </div>
+          <div id="note-price-row" class="hidden flex justify-between text-gray-600">
+            <span>Записка</span>
+            <span><span id="sum-note">0</span> ₴</span>
+          </div>
+          <div class="flex justify-between text-gray-600">
+            <span>Доставка</span>
+            <span><span id="sum-delivery">0</span> ₴</span>
+          </div>
+          <div class="flex justify-between font-bold text-gray-800 text-base
+                      pt-2 border-t border-pink-200">
+            <span>ИТОГО</span>
+            <span><span id="sum-total">0</span> ₴</span>
+          </div>
+          <div class="flex justify-between text-pink-600 font-medium">
+            <span>Предоплата ({{ settings.prepayment_percent }}%)</span>
+            <span><span id="sum-prepayment">0</span> ₴</span>
+          </div>
+        </div>
+      </div>
+
+      {# Navigation #}
+      <div class="flex gap-3">
+        <button type="button" onclick="goToStep(1)"
+                class="py-4 px-5 rounded-xl border border-gray-300 text-gray-600
+                       text-base font-semibold active:bg-gray-50 transition shrink-0">
+          ← Назад
+        </button>
+        <button type="button" onclick="goToStep3()"
+                class="flex-1 py-4 rounded-xl bg-pink-600 text-white
+                       text-base font-semibold active:bg-pink-700 transition">
+          Далее — Итог →
+        </button>
+      </div>
+
+    </div>{# /step-2 #}
+
+    {# ── STEP 3: Summary + submit ──────────────────────────────────── #}
+    <div data-step="3" class="hidden">
+
+      <h2 class="text-base font-semibold text-gray-700 mb-4">Проверьте заказ</h2>
+
+      {# Populated by buildSummary() when user advances to this step #}
+      <div id="order-summary" class="space-y-3 mb-6"></div>
+
+      {# Navigation + submit #}
+      <div class="flex gap-3">
+        <button type="button" onclick="goToStep(2)"
+                class="py-4 px-5 rounded-xl border border-gray-300 text-gray-600
+                       text-base font-semibold active:bg-gray-50 transition shrink-0">
+          ← Назад
+        </button>
+        <button type="submit"
+                class="flex-1 py-4 rounded-xl bg-green-600 text-white
+                       text-base font-semibold active:bg-green-700 transition">
+          ✓ Создать заказ
+        </button>
+      </div>
+
+    </div>{# /step-3 #}
+
+  </form>
+</div>{# /max-w-lg #}
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+// ---------------------------------------------------------------------------
+// Server data injected at render time (used by Step 2 JS)
+// ---------------------------------------------------------------------------
+const VARIETIES = {{ varieties | tojson }};
+const SETTINGS  = {{ settings  | tojson }};
+
+// ---------------------------------------------------------------------------
+// Phone formatting: normalise any input to +380XXXXXXXXX
+// ---------------------------------------------------------------------------
+function formatPhone(el) {
+  let d = el.value.replace(/\D/g, '');
+  if (!d) { el.value = ''; return; }
+  // Strip recognised country-code prefixes, keep at most 9 local digits
+  if (d.startsWith('380'))      d = d.slice(3);
+  else if (d.startsWith('38'))  d = d.slice(2);
+  else if (d.startsWith('0'))   d = d.slice(1);
+  el.value = '+380' + d.slice(0, 9);
+}
+
+// ---------------------------------------------------------------------------
+// Delivery / Pickup toggle
+// ---------------------------------------------------------------------------
+function setPickup(isPickup) {
+  document.getElementById('is_pickup_input').value = isPickup ? '1' : '0';
+  document.getElementById('delivery-fields').classList.toggle('hidden', isPickup);
+
+  const btnDel  = document.getElementById('btn-delivery');
+  const btnPick = document.getElementById('btn-pickup');
+
+  // Active button: pink-filled; inactive: white with gray text
+  btnDel.classList.toggle('bg-pink-600', !isPickup);
+  btnDel.classList.toggle('text-white',  !isPickup);
+  btnDel.classList.toggle('bg-white',     isPickup);
+  btnDel.classList.toggle('text-gray-600',isPickup);
+
+  btnPick.classList.toggle('bg-pink-600',  isPickup);
+  btnPick.classList.toggle('text-white',   isPickup);
+  btnPick.classList.toggle('bg-white',    !isPickup);
+  btnPick.classList.toggle('text-gray-600',!isPickup);
+}
+
+// ---------------------------------------------------------------------------
+// Step navigation
+// ---------------------------------------------------------------------------
+const STEP_CLS = {
+  done:     'w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold bg-green-500 text-white',
+  active:   'w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold bg-pink-600 text-white',
+  inactive: 'w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-500',
+};
+
+function goToStep(n) {
+  // Show only the target step panel
+  document.querySelectorAll('[data-step]').forEach(el =>
+    el.classList.toggle('hidden', el.dataset.step != n)
+  );
+
+  // Update circle styles
+  for (let i = 1; i <= 3; i++) {
+    const ind = document.getElementById('step-ind-' + i);
+    if (ind) ind.className = STEP_CLS[i < n ? 'done' : i === n ? 'active' : 'inactive'];
+  }
+
+  // Update connector colours
+  for (let i = 1; i < 3; i++) {
+    const conn = document.getElementById('conn-' + i + '-' + (i + 1));
+    if (conn) {
+      conn.classList.toggle('bg-pink-600', i < n);
+      conn.classList.toggle('bg-gray-300', i >= n);
+    }
+  }
+
+  window.scrollTo(0, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Step 1 → Step 2: validate before advancing
+// ---------------------------------------------------------------------------
+function goToStep2() {
+  const recipientName  = document.getElementById('recipient-name-input').value.trim();
+  const recipientPhone = document.getElementById('recipient-phone-input').value.trim();
+  const errEl = document.getElementById('step1-error');
+
+  if (!recipientName) {
+    errEl.textContent = 'Укажите имя получателя';
+    errEl.classList.remove('hidden');
+    document.getElementById('recipient-name-input').focus();
+    return;
+  }
+  if (recipientPhone.length < 13) {
+    errEl.textContent = 'Укажите телефон получателя в формате +380XXXXXXXXX';
+    errEl.classList.remove('hidden');
+    document.getElementById('recipient-phone-input').focus();
+    return;
+  }
+
+  errEl.classList.add('hidden');
+  goToStep(2);
+  recalcTotal();   // initialise price summary with current delivery choice
+}
+
+// ===========================================================================
+// STEP 2 — Bouquet composition
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Build <option> HTML for variety selects (used when cloning rows via JS)
+// ---------------------------------------------------------------------------
+function buildVarietyOptions() {
+  let html = '<option value="">Выберите сорт</option>';
+  VARIETIES.forEach(v => {
+    const price = Math.round(v.current_sell_price);
+    html += `<option value="${v.id}" data-price="${v.current_sell_price}" ` +
+            `data-stock="${v.stock_available}">` +
+            `${v.name} — ${price} ₴ \u00a0(${v.stock_available} шт.)` +
+            `</option>`;
+  });
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Add a new variety row (cloned via JS — no Jinja2 here)
+// ---------------------------------------------------------------------------
+function addVarietyRow() {
+  const container = document.getElementById('variety-rows');
+  const div = document.createElement('div');
+  div.className = 'variety-row rounded-xl border border-gray-200 bg-white p-3 mb-2';
+  div.innerHTML =
+    `<div class="flex gap-2 mb-2">` +
+      `<div class="relative flex-1 min-w-0">` +
+        `<select name="variety_id[]"` +
+                `class="w-full rounded-lg border border-gray-200 text-base px-3 py-2.5 ` +
+                       `bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 ` +
+                       `focus:ring-pink-400 appearance-none pr-8"` +
+                `onchange="onVarietyChange(this)">` +
+          buildVarietyOptions() +
+        `</select>` +
+        `<div class="pointer-events-none absolute inset-y-0 right-2 flex items-center">` +
+          `<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24"` +
+               `stroke="currentColor" stroke-width="2">` +
+            `<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>` +
+          `</svg>` +
+        `</div>` +
+      `</div>` +
+      `<button type="button" onclick="removeRow(this)"` +
+              `class="remove-row shrink-0 w-9 h-9 flex items-center justify-center ` +
+                     `rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition text-lg">` +
+        `✕` +
+      `</button>` +
+    `</div>` +
+    `<div class="flex items-center gap-3">` +
+      `<span class="text-sm text-gray-500 shrink-0">Количество:</span>` +
+      `<input type="number" name="quantity[]" value="1" min="1"` +
+             `class="w-20 rounded-lg border border-gray-200 text-base px-3 py-2 ` +
+                    `bg-gray-50 text-center focus:bg-white focus:outline-none ` +
+                    `focus:ring-2 focus:ring-pink-400"` +
+             `oninput="onQtyChange(this)">` +
+      `<span class="text-gray-400 shrink-0">=</span>` +
+      `<span class="row-price font-semibold text-gray-800 shrink-0">— ₴</span>` +
+    `</div>` +
+    `<div class="row-stock-warn hidden mt-1.5 text-xs text-red-600 font-medium"></div>`;
+  container.appendChild(div);
+  updateRemoveButtons();
+  recalcTotal();
+}
+
+// ---------------------------------------------------------------------------
+// Remove a variety row (keep minimum 1)
+// ---------------------------------------------------------------------------
+function removeRow(btn) {
+  if (document.querySelectorAll('.variety-row').length <= 1) return;
+  btn.closest('.variety-row').remove();
+  updateRemoveButtons();
+  checkAllRowsStock();
+  recalcTotal();
+}
+
+// ---------------------------------------------------------------------------
+// Show remove buttons only when more than 1 row exists
+// ---------------------------------------------------------------------------
+function updateRemoveButtons() {
+  const rows = document.querySelectorAll('.variety-row');
+  const show = rows.length > 1;
+  rows.forEach(row => {
+    const btn = row.querySelector('.remove-row');
+    if (btn) btn.classList.toggle('invisible', !show);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Handlers for variety select / quantity input changes
+// ---------------------------------------------------------------------------
+function onVarietyChange(select) {
+  updateRowPrice(select.closest('.variety-row'));
+  checkAllRowsStock();
+  recalcTotal();
+}
+
+function onQtyChange(input) {
+  if (input.value && parseInt(input.value) < 1) input.value = 1;
+  updateRowPrice(input.closest('.variety-row'));
+  checkAllRowsStock();
+  recalcTotal();
+}
+
+// ---------------------------------------------------------------------------
+// Update the "= XXX ₴" label for a single row
+// ---------------------------------------------------------------------------
+function updateRowPrice(row) {
+  const select  = row.querySelector('[name="variety_id[]"]');
+  const qty     = parseInt(row.querySelector('[name="quantity[]"]').value) || 0;
+  const opt     = select.options[select.selectedIndex];
+  const price   = opt ? parseFloat(opt.dataset.price || 0) : 0;
+  row.querySelector('.row-price').textContent =
+    (price && qty) ? (Math.round(price * qty) + ' ₴') : '— ₴';
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate requested quantities per variety_id across all rows
+// ---------------------------------------------------------------------------
+function getVarietyQtyMap() {
+  const map = {};
+  document.querySelectorAll('.variety-row').forEach(row => {
+    const vid = row.querySelector('[name="variety_id[]"]').value;
+    const qty = parseInt(row.querySelector('[name="quantity[]"]').value) || 0;
+    if (vid && qty > 0) map[vid] = (map[vid] || 0) + qty;
+  });
+  return map;
+}
+
+// ---------------------------------------------------------------------------
+// Validate stock for all rows (R2); show per-row warnings; return true if OK
+// ---------------------------------------------------------------------------
+function checkAllRowsStock() {
+  const totals = getVarietyQtyMap();
+  let ok = true;
+  document.querySelectorAll('.variety-row').forEach(row => {
+    const select = row.querySelector('[name="variety_id[]"]');
+    const warn   = row.querySelector('.row-stock-warn');
+    const vid    = select.value;
+    if (!vid || !warn) return;
+    const opt   = select.options[select.selectedIndex];
+    const stock = parseInt(opt?.dataset.stock || 0);
+    const asked = totals[vid] || 0;
+    const over  = asked > stock;
+    warn.classList.toggle('hidden', !over);
+    if (over) {
+      warn.textContent = `⚠ Запрошено ${asked} шт., на складе ${stock} шт.`;
+      ok = false;
+    }
+  });
+  return ok;
+}
+
+// ---------------------------------------------------------------------------
+// Show / hide note textarea and update price summary
+// ---------------------------------------------------------------------------
+function toggleNote() {
+  const checked = document.getElementById('has-note-cb').checked;
+  document.getElementById('note-fields').classList.toggle('hidden', !checked);
+  recalcTotal();
+}
+
+// ---------------------------------------------------------------------------
+// Live price recalculation — updates the summary panel
+// ---------------------------------------------------------------------------
+function recalcTotal() {
+  // Flowers
+  let flowersTotal = 0;
+  document.querySelectorAll('.variety-row').forEach(row => {
+    const select = row.querySelector('[name="variety_id[]"]');
+    const qty    = parseInt(row.querySelector('[name="quantity[]"]').value) || 0;
+    const opt    = select.options[select.selectedIndex];
+    const price  = opt ? parseFloat(opt.dataset.price || 0) : 0;
+    if (price && qty) flowersTotal += price * qty;
+    updateRowPrice(row);
+  });
+
+  // Wrapping
+  const wrappingSelect = document.getElementById('wrapping-select');
+  const wrappingOpt    = wrappingSelect.options[wrappingSelect.selectedIndex];
+  const wrappingPrice  = wrappingOpt ? parseFloat(wrappingOpt.dataset.price || 0) : 0;
+
+  // Note (V4)
+  const hasNote   = document.getElementById('has-note-cb').checked;
+  const notePrice = hasNote ? parseFloat(SETTINGS.note_price || 0) : 0;
+
+  // Delivery
+  const isPickup      = document.getElementById('is_pickup_input').value === '1';
+  const deliveryPrice = isPickup ? 0 : parseFloat(SETTINGS.delivery_price || 0);
+
+  const total      = flowersTotal + wrappingPrice + notePrice + deliveryPrice;
+  const pct        = parseFloat(SETTINGS.prepayment_percent || 50) / 100;
+  const prepayment = Math.ceil(total * pct);
+
+  document.getElementById('sum-flowers').textContent    = Math.round(flowersTotal);
+  document.getElementById('sum-wrapping').textContent   = Math.round(wrappingPrice);
+  document.getElementById('sum-note').textContent       = Math.round(notePrice);
+  document.getElementById('sum-delivery').textContent   = Math.round(deliveryPrice);
+  document.getElementById('sum-total').textContent      = Math.round(total);
+  document.getElementById('sum-prepayment').textContent = prepayment;
+
+  // Note price row — only show when note is added
+  document.getElementById('note-price-row').classList.toggle('hidden', !hasNote);
+}
+
+// ---------------------------------------------------------------------------
+// Step 2 → Step 3: full validation before advancing
+// ---------------------------------------------------------------------------
+function goToStep3() {
+  const errEl = document.getElementById('step2-error');
+
+  // V5: at least one variety with qty >= 1
+  let hasItem = false;
+  document.querySelectorAll('.variety-row').forEach(row => {
+    const vid = row.querySelector('[name="variety_id[]"]').value;
+    const qty = parseInt(row.querySelector('[name="quantity[]"]').value) || 0;
+    if (vid && qty >= 1) hasItem = true;
+  });
+  if (!hasItem) {
+    errEl.textContent = 'Добавьте хотя бы один сорт цветов';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  // R2: stock check (client-side)
+  if (!checkAllRowsStock()) {
+    errEl.textContent = 'Запрошенное количество превышает остаток на складе';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  // V2: ribbon required
+  if (!document.getElementById('ribbon-select').value) {
+    errEl.textContent = 'Выберите цвет ленты';
+    errEl.classList.remove('hidden');
+    document.getElementById('ribbon-select').focus();
+    return;
+  }
+
+  // V4: note text required when note is checked
+  if (document.getElementById('has-note-cb').checked) {
+    const noteText = document.querySelector('[name="note_text"]').value.trim();
+    if (!noteText) {
+      errEl.textContent = 'Введите текст записки или снимите галочку «Записка»';
+      errEl.classList.remove('hidden');
+      document.querySelector('[name="note_text"]').focus();
+      return;
+    }
+  }
+
+  errEl.classList.add('hidden');
+  goToStep(3);
+  buildSummary();
+}
+
+// ---------------------------------------------------------------------------
+// Build the Step 3 read-only summary from current form values
+// ---------------------------------------------------------------------------
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function summaryCard(title, rows) {
+  const rowsHTML = rows
+    .filter(r => r)   // skip null/false rows
+    .map(r => `<div class="flex justify-between gap-2 text-sm">
+                 <span class="text-gray-500 shrink-0">${r[0]}</span>
+                 <span class="text-gray-800 text-right">${r[1]}</span>
+               </div>`)
+    .join('');
+  return `<div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+              ${title}
+            </div>
+            <div class="space-y-1">${rowsHTML}</div>
+          </div>`;
+}
+
+function buildSummary() {
+  const isPickup = document.getElementById('is_pickup_input').value === '1';
+
+  // ── Customer ─────────────────────────────────────────────────────────
+  const custPhone = esc(document.getElementById('customer-phone-input').value  || '—');
+  const custName  = esc(document.getElementById('customer-name-input').value   || 'Аноним');
+
+  // ── Recipient ────────────────────────────────────────────────────────
+  const recName  = esc(document.getElementById('recipient-name-input').value);
+  const recPhone = esc(document.getElementById('recipient-phone-input').value);
+  const address  = esc(document.querySelector('[name="delivery_address"]').value || '');
+  const time     = esc(document.querySelector('[name="desired_time"]').value     || '');
+
+  // ── Varieties ────────────────────────────────────────────────────────
+  let varietyRows = [];
+  document.querySelectorAll('.variety-row').forEach(row => {
+    const select = row.querySelector('[name="variety_id[]"]');
+    const opt    = select.options[select.selectedIndex];
+    if (!opt || !opt.value) return;
+    const qty   = parseInt(row.querySelector('[name="quantity[]"]').value) || 0;
+    const price = parseFloat(opt.dataset.price || 0);
+    const name  = esc(opt.text.split(' —')[0].trim());
+    varietyRows.push([`${name} × ${qty} шт.`, `${Math.round(price * qty)} ₴`]);
+  });
+
+  // ── Wrapping ─────────────────────────────────────────────────────────
+  const wrapSel  = document.getElementById('wrapping-select');
+  const wrapOpt  = wrapSel.options[wrapSel.selectedIndex];
+  const wrapName = esc(wrapOpt ? wrapOpt.text.split(' —')[0].trim() : 'Без упаковки');
+
+  // ── Ribbon ───────────────────────────────────────────────────────────
+  const ribSel  = document.getElementById('ribbon-select');
+  const ribOpt  = ribSel.options[ribSel.selectedIndex];
+  const ribName = esc(ribOpt ? ribOpt.text : '');
+
+  // ── Note ─────────────────────────────────────────────────────────────
+  const hasNote  = document.getElementById('has-note-cb').checked;
+  const noteText = esc(document.querySelector('[name="note_text"]').value || '');
+
+  // ── Price totals (already calculated by recalcTotal) ─────────────────
+  const sumFlowers    = document.getElementById('sum-flowers').textContent;
+  const sumWrapping   = document.getElementById('sum-wrapping').textContent;
+  const sumNote       = document.getElementById('sum-note').textContent;
+  const sumDelivery   = document.getElementById('sum-delivery').textContent;
+  const sumTotal      = document.getElementById('sum-total').textContent;
+  const sumPrepayment = document.getElementById('sum-prepayment').textContent;
+
+  const html =
+    summaryCard('Получатель', [
+      ['Имя',     recName],
+      ['Телефон', recPhone],
+      isPickup
+        ? ['Получение', '🏪 Самовывоз']
+        : ['Адрес',     `📍 ${address || '—'}`],
+      time ? ['Время', `⏰ ${time}`] : null,
+    ]) +
+    summaryCard('Заказчик', [
+      ['Имя',     custName],
+      ['Телефон', custPhone],
+    ]) +
+    summaryCard('Букет', [
+      ...varietyRows,
+      ['Упаковка', wrapName],
+      ['Лента',    ribName],
+      hasNote ? ['Записка', `«${noteText}»`] : null,
+    ]) +
+    `<div class="rounded-xl bg-pink-50 border border-pink-100 p-4">
+       <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+         Стоимость
+       </div>
+       <div class="space-y-1">
+         <div class="flex justify-between text-sm text-gray-600">
+           <span>Цветы</span><span>${sumFlowers} ₴</span>
+         </div>
+         <div class="flex justify-between text-sm text-gray-600">
+           <span>Упаковка</span><span>${sumWrapping} ₴</span>
+         </div>
+         ${hasNote
+           ? `<div class="flex justify-between text-sm text-gray-600">
+                <span>Записка</span><span>${sumNote} ₴</span>
+              </div>`
+           : ''}
+         <div class="flex justify-between text-sm text-gray-600">
+           <span>Доставка</span><span>${sumDelivery} ₴</span>
+         </div>
+         <div class="flex justify-between font-bold text-gray-800 text-base
+                     pt-2 border-t border-pink-200">
+           <span>ИТОГО</span><span>${sumTotal} ₴</span>
+         </div>
+         <div class="flex justify-between text-pink-600 font-medium text-sm pt-0.5">
+           <span>Рекомендуемая предоплата</span>
+           <span>${sumPrepayment} ₴</span>
+         </div>
+       </div>
+     </div>`;
+
+  document.getElementById('order-summary').innerHTML = html;
+}
+
+// Initialise price panel on page load (reflects default delivery mode)
+recalcTotal();
+</script>
+{% endblock %}

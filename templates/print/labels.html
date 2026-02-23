@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Бирки — Маршрут #{{ route['route_number'] }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fff;
+    }
+
+    /*
+      A4 = 210 × 297 mm.
+      Page margins: 6mm all sides → usable area: 198 × 285 mm.
+      2 columns, 4 rows → each label ≈ 97.5 × 69.75 mm.
+      Gap 3mm between cols/rows.
+    */
+    .label-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 3mm;
+      width: 198mm;
+      margin: 0 auto;
+      padding: 6mm;
+    }
+
+    .label {
+      height: 69mm;
+      padding: 4mm 5mm;
+      border: 1px dashed #bbb;
+      border-radius: 2mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      overflow: hidden;
+    }
+
+    /* Top row: route badge + order number */
+    .label-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .route-badge {
+      font-size: 9px;
+      color: #888;
+      background: #f3f4f6;
+      border-radius: 2mm;
+      padding: 1.5px 5px;
+      white-space: nowrap;
+    }
+    .order-num {
+      font-size: 15px;
+      font-weight: 900;
+      color: #111;
+      text-align: right;
+    }
+
+    /* Recipient name — main focus */
+    .recipient {
+      font-size: 17px;
+      font-weight: 800;
+      color: #111;
+      line-height: 1.15;
+      margin-top: 2mm;
+      /* allow two lines, clamp at 3 */
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Address */
+    .address {
+      font-size: 11px;
+      color: #444;
+      margin-top: 1.5mm;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .address-pickup {
+      font-size: 11px;
+      color: #777;
+      margin-top: 1.5mm;
+      font-style: italic;
+    }
+
+    /* Bottom row: time + payment */
+    .label-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: auto;
+      padding-top: 2mm;
+      border-top: 1px solid #e5e7eb;
+    }
+    .time-slot {
+      font-size: 11px;
+      color: #555;
+    }
+    .payment-paid {
+      font-size: 13px;
+      font-weight: 900;
+      color: #16a34a;
+    }
+    .payment-due {
+      font-size: 12px;
+      font-weight: 900;
+      color: #dc2626;
+      text-align: right;
+      line-height: 1.2;
+    }
+
+    /* ── Print ─────────────────────────────────────────── */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 0;
+      }
+      body { background: #fff; }
+      .label-grid {
+        padding: 6mm;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="label-grid">
+  {% for s in stops %}
+  <div class="label">
+
+    {# Top: route/stop badge + order number #}
+    <div class="label-top">
+      <span class="route-badge">
+        Маршрут {{ route['route_number'] }} · Стоп {{ s['route_order'] }}
+        {% if s['desired_time'] %} · {{ s['desired_time'] }}{% endif %}
+      </span>
+      <span class="order-num">#{{ s['order_number'] }}</span>
+    </div>
+
+    {# Recipient #}
+    <div class="recipient">{{ s['recipient_name'] }}</div>
+
+    {# Address #}
+    {% if s['delivery_address'] %}
+    <div class="address">{{ s['delivery_address'] }}</div>
+    {% else %}
+    <div class="address-pickup">🏪 Самовывоз</div>
+    {% endif %}
+
+    {# Bottom: time + payment #}
+    <div class="label-bottom">
+      <div class="time-slot">
+        {% if s['desired_time'] %}⏰ {{ s['desired_time'] }}{% endif %}
+      </div>
+      {% set balance = s['total_price'] - s['paid_amount'] %}
+      {% if balance <= 0 %}
+        <div class="payment-paid">ОПЛАЧЕНО ✓</div>
+      {% else %}
+        <div class="payment-due">
+          ДОПЛАТА<br>{{ "%.0f"|format(balance) }} ₴ ⚠
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+  {% endfor %}
+</div>
+
+<script>window.onload = () => window.print();</script>
+</body>
+</html>

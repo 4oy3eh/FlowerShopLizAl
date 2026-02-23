@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Финансы — FlowerShop{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-bold text-gray-900 mb-4">Финансы</h1>
+
+{# ══════════════════════════════════════════════════════
+   Финансовая сводка
+   ══════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Сводка по заказам</h2>
+
+  <div class="space-y-2 text-sm">
+
+    {# Выручка #}
+    <div class="flex justify-between items-center">
+      <span class="text-gray-500">Выручка (ожидаемая)</span>
+      <span class="font-bold text-gray-900 text-base">{{ "%.0f"|format(finance['revenue']) }} ₴</span>
+    </div>
+
+    {# Получено #}
+    <div class="flex justify-between items-center">
+      <span class="text-gray-500">Получено</span>
+      <span class="font-semibold text-green-700">{{ "%.0f"|format(finance['received']) }} ₴</span>
+    </div>
+
+    {# К получению #}
+    <div class="flex justify-between items-center">
+      <span class="text-gray-500">К получению</span>
+      {% if finance['pending'] > 0 %}
+        <span class="font-semibold text-red-700">{{ "%.0f"|format(finance['pending']) }} ₴</span>
+      {% else %}
+        <span class="font-semibold text-gray-400">0 ₴</span>
+      {% endif %}
+    </div>
+
+    {# Переплаты #}
+    {% if finance['overpayments'] > 0 %}
+    <div class="flex justify-between items-center">
+      <span class="text-gray-500">Переплаты клиентов</span>
+      <span class="font-semibold text-teal-700">{{ "%.0f"|format(finance['overpayments']) }} ₴</span>
+    </div>
+    {% endif %}
+
+    {# Divider before cost/profit #}
+    <div class="border-t border-gray-100 pt-2 mt-1 space-y-2">
+
+      {# Себестоимость #}
+      <div class="flex justify-between items-center">
+        <span class="text-gray-500">Себестоимость</span>
+        <span class="font-semibold text-gray-700">{{ "%.0f"|format(cost) }} ₴</span>
+      </div>
+
+      {# Прибыль #}
+      <div class="flex justify-between items-center pt-1 border-t border-gray-100">
+        <span class="font-semibold text-gray-700">Прибыль</span>
+        {% if profit >= 0 %}
+          <span class="font-bold text-lg text-green-700">{{ "%.0f"|format(profit) }} ₴</span>
+        {% else %}
+          <span class="font-bold text-lg text-red-700">{{ "%.0f"|format(profit) }} ₴</span>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# ══════════════════════════════════════════════════════
+   Сегодня
+   ══════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Получено сегодня</h2>
+
+  <div class="text-2xl font-bold text-gray-900 mb-3">
+    {{ "%.0f"|format(today_totals['grand_total']) }} ₴
+  </div>
+
+  <div class="grid grid-cols-3 gap-2 text-center text-sm">
+    <div class="bg-gray-50 rounded-xl p-2">
+      <div class="font-semibold text-gray-800">{{ "%.0f"|format(today_totals['cash_total']) }} ₴</div>
+      <div class="text-xs text-gray-400">💵 Нал</div>
+    </div>
+    <div class="bg-gray-50 rounded-xl p-2">
+      <div class="font-semibold text-gray-800">{{ "%.0f"|format(today_totals['card_total']) }} ₴</div>
+      <div class="text-xs text-gray-400">💳 Карта</div>
+    </div>
+    <div class="bg-gray-50 rounded-xl p-2">
+      <div class="font-semibold text-gray-800">{{ "%.0f"|format(today_totals['transfer_total']) }} ₴</div>
+      <div class="text-xs text-gray-400">📲 Перевод</div>
+    </div>
+  </div>
+</div>
+
+{# ══════════════════════════════════════════════════════
+   Должники
+   ══════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Должники</h2>
+    <span class="text-xs font-medium text-gray-500">{{ debtors|length }} заказов</span>
+  </div>
+
+  {% if debtors %}
+  <div class="space-y-2">
+    {% for o in debtors %}
+    <a href="/orders/{{ o['id'] }}"
+       class="flex items-center justify-between py-2 border-b border-gray-50
+              last:border-0 active:bg-gray-50 -mx-1 px-1 rounded-xl transition">
+
+      <div class="flex-1 min-w-0">
+        {# Order number + status badge #}
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="font-semibold text-pink-600 text-sm">#{{ o['order_number'] }}</span>
+          <span class="px-1.5 py-0.5 rounded-full text-xs font-medium
+                       {{ STATUS_COLORS[o['order_status']] }}">
+            {{ STATUS_LABELS[o['order_status']] }}
+          </span>
+          <span class="px-1.5 py-0.5 rounded-full text-xs font-medium
+                       {{ PAYMENT_COLORS[o['payment_status']] }}">
+            {{ PAYMENT_LABELS[o['payment_status']] }}
+          </span>
+        </div>
+        {# Recipient #}
+        <div class="text-sm text-gray-700 truncate mt-0.5">{{ o['recipient_name'] }}</div>
+        {# Paid / Total #}
+        <div class="text-xs text-gray-400">
+          {{ "%.0f"|format(o['paid_amount']) }} ₴ из {{ "%.0f"|format(o['total_price']) }} ₴
+        </div>
+      </div>
+
+      {# Debt amount — highlighted #}
+      <div class="shrink-0 ml-3 text-right">
+        <div class="text-lg font-bold text-red-700">{{ "%.0f"|format(o['debt']) }} ₴</div>
+        <div class="text-xs text-gray-400">долг</div>
+      </div>
+
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-400">Все заказы оплачены 🎉</p>
+  {% endif %}
+</div>
+
+{# ══════════════════════════════════════════════════════
+   Платежи сегодня
+   ══════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Платежи сегодня</h2>
+
+  {% if today_payments %}
+  <div class="space-y-2">
+    {% for p in today_payments %}
+    <div class="flex justify-between items-start py-1.5 border-b border-gray-50 last:border-0">
+      <div>
+        <div class="flex items-center gap-1.5">
+          <a href="/orders/{{ p['order_id'] }}"
+             class="font-medium text-pink-600 text-sm">#{{ p['order_number'] }}</a>
+          <span class="text-gray-700 text-sm">{{ p['recipient_name'] }}</span>
+        </div>
+        <div class="text-xs text-gray-400 mt-0.5">
+          {{ PAYMENT_TYPE_LABELS.get(p['payment_type'], p['payment_type']) }}
+          {% if p['received_by'] %} · {{ p['received_by'] }}{% endif %}
+          · {{ p['created_at'][11:16] }}
+        </div>
+      </div>
+      <span class="font-bold text-gray-900 shrink-0 text-base">+{{ "%.0f"|format(p['amount']) }} ₴</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-400">Платежей сегодня ещё нет</p>
+  {% endif %}
+</div>
+
+{% endblock %}

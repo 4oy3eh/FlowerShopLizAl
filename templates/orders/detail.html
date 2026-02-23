@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}#{{ order['order_number'] }} — FlowerShop{% endblock %}
+
+{% block content %}
+
+{# ── Header ── #}
+<div class="flex items-start gap-2 mb-4">
+  <div class="flex-1">
+    <div class="flex items-center gap-2 flex-wrap">
+      <h1 class="text-xl font-bold text-gray-900">#{{ order['order_number'] }}</h1>
+      <span class="px-2 py-0.5 rounded-full text-xs font-medium
+                   {{ STATUS_COLORS[order['order_status']] }}">
+        {{ STATUS_LABELS[order['order_status']] }}
+      </span>
+      <span class="px-2 py-0.5 rounded-full text-xs font-medium
+                   {{ PAYMENT_COLORS[order['payment_status']] }}">
+        {{ PAYMENT_LABELS[order['payment_status']] }}
+      </span>
+    </div>
+    <p class="text-xs text-gray-400 mt-0.5">
+      Создан {{ order['created_at'][:16].replace('T', ' ') }}
+    </p>
+  </div>
+
+  {# Print buttons #}
+  <div class="flex gap-2 shrink-0">
+    <a href="/orders/{{ order['id'] }}/label" target="_blank"
+       class="px-3 py-1.5 rounded-xl border border-gray-200 text-xs text-gray-600
+              bg-white active:bg-gray-50 transition">
+      🏷 Бирка
+    </a>
+    <a href="/orders/{{ order['id'] }}/assembly" target="_blank"
+       class="px-3 py-1.5 rounded-xl border border-gray-200 text-xs text-gray-600
+              bg-white active:bg-gray-50 transition">
+      📋 Сборка
+    </a>
+  </div>
+</div>
+
+{# ── Status action buttons ── #}
+{% if order['order_status'] in STATUS_FLOW %}
+  <form action="/orders/{{ order['id'] }}/status" method="post" class="mb-3">
+    <button type="submit"
+            class="w-full py-3 rounded-2xl bg-pink-600 text-white font-semibold text-base
+                   active:bg-pink-700 transition shadow-sm">
+      {{ NEXT_STATUS_LABEL[order['order_status']] }}
+    </button>
+  </form>
+{% endif %}
+
+{% if order['order_status'] in CANCEL_ALLOWED %}
+<div class="mb-4">
+
+  {# Step 1 — single "cancel" trigger button #}
+  <button type="button" id="cancel-trigger"
+          onclick="this.classList.add('hidden');
+                   document.getElementById('cancel-panel').classList.remove('hidden')"
+          class="w-full py-2.5 rounded-2xl border border-red-200 text-red-600
+                 text-sm font-medium bg-white active:bg-red-50 transition">
+    Отменить заказ
+  </button>
+
+  {# Step 2 — confirmation panel (hidden until trigger is clicked) #}
+  <div id="cancel-panel" class="hidden bg-red-50 border border-red-200 rounded-2xl p-4">
+
+    <p class="text-sm font-semibold text-red-800 mb-1">
+      Отменить #{{ order['order_number'] }}?
+    </p>
+
+    {% if order['paid_amount'] > 0 %}
+    <p class="text-sm text-red-700 mb-3">
+      Вы уверены? Предоплата <strong>{{ order['paid_amount']|int }} ₴</strong> не возвращается.
+    </p>
+    {% else %}
+    <p class="text-sm text-red-600 mb-3">
+      Вы уверены? Предоплата не возвращается.
+    </p>
+    {% endif %}
+
+    <div class="flex gap-2">
+      <form action="/orders/{{ order['id'] }}/cancel" method="post" class="flex-1">
+        <button type="submit"
+                class="w-full py-2.5 rounded-xl bg-red-600 text-white
+                       text-sm font-semibold active:bg-red-700 transition">
+          Да, отменить
+        </button>
+      </form>
+      <button type="button"
+              onclick="document.getElementById('cancel-trigger').classList.remove('hidden');
+                       document.getElementById('cancel-panel').classList.add('hidden')"
+              class="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600
+                     text-sm font-medium bg-white active:bg-gray-50 transition">
+        Не отменять
+      </button>
+    </div>
+
+  </div>
+</div>
+{% endif %}
+
+{# ── Recipient ── #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Получатель</h2>
+  <p class="font-semibold text-gray-900">{{ order['recipient_name'] }}</p>
+  <p class="text-sm text-gray-600">{{ order['recipient_phone'] }}</p>
+
+  {% if order['is_pickup'] %}
+    <p class="mt-2 text-sm text-gray-700">🏪 Самовывоз</p>
+  {% else %}
+    <p class="mt-2 text-sm text-gray-700">🚚 {{ order['delivery_address'] }}</p>
+  {% endif %}
+
+  {% if order['desired_time'] %}
+    <p class="text-sm text-gray-500 mt-1">⏰ {{ order['desired_time'] }}</p>
+  {% endif %}
+</div>
+
+{# ── Customer ── #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Заказчик</h2>
+  <p class="font-semibold text-gray-900">{{ order['customer_name'] or 'Аноним' }}</p>
+  <p class="text-sm text-gray-600">{{ order['customer_phone'] }}</p>
+</div>
+
+{# ── Bouquet ── #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Букет</h2>
+
+  {# Flowers #}
+  <table class="w-full text-sm mb-3">
+    <thead>
+      <tr class="text-left text-xs text-gray-400 border-b border-gray-100">
+        <th class="pb-1 font-medium">Сорт</th>
+        <th class="pb-1 font-medium text-right">Кол-во</th>
+        <th class="pb-1 font-medium text-right">Цена</th>
+        <th class="pb-1 font-medium text-right">Сумма</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr class="border-b border-gray-50">
+        <td class="py-1.5 text-gray-800">{{ item['variety_name'] }}</td>
+        <td class="py-1.5 text-right text-gray-600">{{ item['quantity'] }} шт.</td>
+        <td class="py-1.5 text-right text-gray-500">{{ "%.0f"|format(item['unit_price']) }}</td>
+        <td class="py-1.5 text-right font-medium text-gray-900">{{ "%.0f"|format(item['line_total']) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# Wrapping & ribbon #}
+  <div class="flex gap-4 text-sm text-gray-600 mb-2">
+    <span>🎁 {{ order['wrapping_name'] or 'Без упаковки' }}</span>
+    <span>🎀 {{ order['ribbon_name'] }}</span>
+  </div>
+
+  {# Note #}
+  {% if order['has_note'] %}
+  <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-sm text-gray-700">
+    <span class="font-medium">📝 Записка:</span> {{ order['note_text'] }}
+  </div>
+  {% endif %}
+</div>
+
+{# ── Price breakdown ── #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Стоимость</h2>
+
+  <div class="space-y-1 text-sm">
+    <div class="flex justify-between text-gray-600">
+      <span>Цветы</span>
+      <span>{{ "%.0f"|format(order['flowers_total']) }} ₴</span>
+    </div>
+    {% if order['wrapping_price'] > 0 %}
+    <div class="flex justify-between text-gray-600">
+      <span>Упаковка</span>
+      <span>{{ "%.0f"|format(order['wrapping_price']) }} ₴</span>
+    </div>
+    {% endif %}
+    {% if order['note_price'] > 0 %}
+    <div class="flex justify-between text-gray-600">
+      <span>Записка</span>
+      <span>{{ "%.0f"|format(order['note_price']) }} ₴</span>
+    </div>
+    {% endif %}
+    {% if order['delivery_price'] > 0 %}
+    <div class="flex justify-between text-gray-600">
+      <span>Доставка</span>
+      <span>{{ "%.0f"|format(order['delivery_price']) }} ₴</span>
+    </div>
+    {% endif %}
+    <div class="flex justify-between font-bold text-gray-900 pt-2 border-t border-gray-100">
+      <span>Итого</span>
+      <span>{{ "%.0f"|format(order['total_price']) }} ₴</span>
+    </div>
+  </div>
+</div>
+
+{% include 'payments/_section.html' %}
+
+{# Back link #}
+<a href="/orders" class="block text-center text-sm text-gray-400 py-2 mt-1">← К списку заказов</a>
+
+{% endblock %}
