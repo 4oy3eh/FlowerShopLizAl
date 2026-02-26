@@ -257,16 +257,16 @@ def payments_index():
          WHERE date(created_at) = date('now') '''
     ).fetchone()
 
-    # ── Debtors: not fully paid, not cancelled; biggest debts first ──────────
+    # ── Debtors: not fully paid, not cancelled; nearest delivery date first ────
     debtors = db.execute(
         '''SELECT o.id, o.order_number, o.recipient_name, o.recipient_phone,
-                  o.order_status, o.payment_status,
+                  o.order_status, o.payment_status, o.delivery_date,
                   o.total_price, o.paid_amount,
                   (o.total_price - o.paid_amount) AS debt
              FROM orders o
             WHERE o.payment_status NOT IN ('paid', 'overpaid')
               AND o.order_status   != 'cancelled'
-            ORDER BY debt DESC'''
+            ORDER BY o.delivery_date ASC, debt DESC'''
     ).fetchall()
 
     # ── Today's payment log ──────────────────────────────────────────────────

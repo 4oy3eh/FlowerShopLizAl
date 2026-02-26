@@ -121,7 +121,11 @@
         🌷 FlowerShop · Маршрутный лист
       </div>
       <div class="meta">
-        Дата: {{ route['created_at'][:10] }}
+        {% if route['delivery_date'] %}
+          Дата: {{ route['delivery_date'].split('-')[2] | int }} марта
+        {% else %}
+          Дата: {{ route['created_at'][:10] }}
+        {% endif %}
         {% if route['planned_start'] %}
           &nbsp;·&nbsp; Слот: {{ route['planned_start'] }}
         {% endif %}

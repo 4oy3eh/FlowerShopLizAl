@@ -9,6 +9,7 @@ user-readable message on any rule violation.
 import re
 from datetime import datetime
 
+from config import DEFAULT_DELIVERY_DATE
 from services.price_service import snapshot_prices
 from services.stock_service import check_availability, reserve, release
 
@@ -136,11 +137,13 @@ def create_order(db, data: dict) -> int:
             * ``recipient_phone`` — recipient phone (``+380…``, required).
             * ``is_pickup`` — ``'1'`` for self-pickup, ``'0'`` for delivery.
             * ``delivery_address`` — required when ``is_pickup == '0'``.
-            * ``desired_time`` — delivery time slot string, e.g. ``'10-12'``.
+            * ``delivery_date`` — ISO date string, e.g. ``'2025-03-08'``.
+            * ``desired_time`` — delivery time slot string, e.g. ``'10:00-12:00'``.
             * ``has_note`` — ``'1'`` if a greeting note is requested.
             * ``note_text`` — note body; required when ``has_note == '1'``.
             * ``wrapping_id`` — int string or ``''`` for no wrapping.
             * ``ribbon_color_id`` — int string (required).
+            * ``tissue`` — one of 'florist', 'none', 'white', 'cream', 'black', 'pink'.
             * ``variety_ids`` — list of variety ID strings.
             * ``quantities`` — list of quantity strings (parallel to
               ``variety_ids``).
@@ -164,18 +167,20 @@ def create_order(db, data: dict) -> int:
         raise ValueError('Выберите цвет ленты')
     ribbon_color_id    = int(raw_ribbon_id)
 
-    recipient_name     = (data.get('recipient_name') or '').strip()
-    if not recipient_name:                         # V2
-        raise ValueError('Укажите имя получателя')
+    _TISSUE_VALUES = {'florist', 'none', 'white', 'cream', 'black', 'pink'}
+    tissue = (data.get('tissue') or 'florist').strip()
+    if tissue not in _TISSUE_VALUES:
+        tissue = 'florist'
 
-    recipient_phone    = _validate_phone(          # V1 / V2
-        data.get('recipient_phone', ''), 'телефона получателя'
-    )
+    recipient_name     = (data.get('recipient_name') or '').strip()
+
+    raw_recip_phone    = (data.get('recipient_phone') or '').strip()
+    if raw_recip_phone:
+        recipient_phone = _validate_phone(raw_recip_phone, 'телефона получателя')  # V1
+    else:
+        recipient_phone = ''
 
     delivery_address   = (data.get('delivery_address') or '').strip() or None
-
-    if not is_pickup and not delivery_address:     # V3
-        raise ValueError('Укажите адрес доставки')
 
     note_text = (data.get('note_text') or '').strip() or None
     if has_note and not note_text:                 # V4
@@ -192,10 +197,12 @@ def create_order(db, data: dict) -> int:
     if raw_cust_phone:
         customer_phone = _validate_phone(raw_cust_phone, 'телефона заказчика')  # V1
         customer_name  = (data.get('customer_name') or '').strip() or 'Аноним'
-    else:
+    elif recipient_phone:
         # Customer phone not provided → use recipient as the customer record
         customer_phone = recipient_phone
-        customer_name  = recipient_name
+        customer_name  = recipient_name or 'Аноним'
+    else:
+        raise ValueError('Укажите телефон заказчика или получателя')
 
     # ── Stock check (R2) — before any writes ─────────────────────────────
     # Aggregate requested quantities per variety_id
@@ -215,7 +222,7 @@ def create_order(db, data: dict) -> int:
             )
 
     # ── Price snapshot (R1) ───────────────────────────────────────────────
-    prices = snapshot_prices(db, variety_id_qty, wrapping_id, has_note, is_pickup)
+    prices = snapshot_prices(db, variety_id_qty, wrapping_id, tissue, has_note, is_pickup)
 
     # ── Persist in one transaction ────────────────────────────────────────
     try:
@@ -228,17 +235,17 @@ def create_order(db, data: dict) -> int:
                    order_number,
                    customer_id,
                    recipient_name, recipient_phone,
-                   delivery_address, is_pickup, desired_time,
+                   delivery_address, is_pickup, delivery_date, desired_time,
                    has_note, note_text,
-                   wrapping_id, ribbon_color_id,
+                   wrapping_id, ribbon_color_id, tissue,
                    flowers_total, wrapping_price, note_price, delivery_price, total_price,
                    created_by
                ) VALUES (
                    'TEMP', ?,
                    ?, ?,
+                   ?, ?, ?, ?,
+                   ?, ?,
                    ?, ?, ?,
-                   ?, ?,
-                   ?, ?,
                    ?, ?, ?, ?, ?,
                    'admin'
                )''',
@@ -248,11 +255,13 @@ def create_order(db, data: dict) -> int:
                 recipient_phone,
                 delivery_address,
                 1 if is_pickup else 0,
+                data.get('delivery_date') or DEFAULT_DELIVERY_DATE,
                 data.get('desired_time') or None,
                 1 if has_note else 0,
                 note_text,
                 wrapping_id,
                 ribbon_color_id,
+                tissue,
                 prices['flowers_total'],
                 prices['wrapping_price'],
                 prices['note_price'],
@@ -323,6 +332,42 @@ def advance_status(db, order_id: int) -> str:
     )
     db.commit()
     return nxt
+
+
+def update_recipient(db, order_id: int, data: dict) -> None:
+    """Update recipient info for an existing order.
+
+    Args:
+        db: Active SQLite connection.
+        order_id: Primary key of the order to update.
+        data: Dict with optional keys: ``recipient_name``, ``recipient_phone``,
+            ``delivery_address``.
+
+    Raises:
+        ValueError: If order is not found or phone format is invalid.
+    """
+    row = db.execute('SELECT id FROM orders WHERE id = ?', (order_id,)).fetchone()
+    if row is None:
+        raise ValueError('Заказ не найден')
+
+    recipient_name = (data.get('recipient_name') or '').strip()
+
+    raw_phone = (data.get('recipient_phone') or '').strip()
+    if raw_phone:
+        recipient_phone = _validate_phone(raw_phone, 'телефона получателя')
+    else:
+        recipient_phone = ''
+
+    delivery_address = (data.get('delivery_address') or '').strip() or None
+
+    db.execute(
+        """UPDATE orders
+              SET recipient_name = ?, recipient_phone = ?, delivery_address = ?,
+                  updated_at = datetime('now')
+            WHERE id = ?""",
+        (recipient_name, recipient_phone, delivery_address, order_id)
+    )
+    db.commit()
 
 
 def cancel_order(db, order_id: int) -> None:

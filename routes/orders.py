@@ -19,6 +19,7 @@ import html
 
 from flask import Blueprint, flash, redirect, render_template, request
 
+from config import DELIVERY_DATES, DEFAULT_DELIVERY_DATE, TIME_SLOTS
 from database.db import get_db
 from services.order_service import (
     CANCEL_ALLOWED,
@@ -26,11 +27,10 @@ from services.order_service import (
     advance_status,
     cancel_order,
     create_order,
+    update_recipient,
 )
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/orders')
-
-TIME_SLOTS = ['08-10', '10-12', '12-14', '14-16', '16-18', '18-20']
 
 _INPUT_CLS = (
     'w-full rounded-xl border border-gray-300 text-lg px-4 py-3.5 '
@@ -134,22 +134,44 @@ def new_order():
     ).fetchall()]
 
     wrapping = [dict(r) for r in db.execute(
-        'SELECT id, name, current_price FROM wrapping_options WHERE is_active = 1 ORDER BY name'
+        '''SELECT id, name, wrapping_type, current_price
+             FROM wrapping_options
+            WHERE is_active = 1
+            ORDER BY CASE wrapping_type
+                       WHEN 'florist'  THEN 0
+                       WHEN 'замшевая' THEN 1
+                       WHEN 'каффин'   THEN 2
+                       WHEN 'пленка'   THEN 3
+                       ELSE 4 END,
+                     name'''
     ).fetchall()]
 
     ribbons = [dict(r) for r in db.execute(
-        'SELECT id, name FROM ribbon_colors WHERE is_active = 1 ORDER BY name'
+        '''SELECT id, name FROM ribbon_colors WHERE is_active = 1
+           ORDER BY CASE WHEN name = 'Выбор флориста' THEN 0 ELSE 1 END, name'''
     ).fetchall()]
 
     settings = {row['key']: row['value']
                 for row in db.execute('SELECT key, value FROM system_settings').fetchall()}
 
+    tissue_options = [
+        ('florist', 'Выбор флориста'),
+        ('none',    'Без тишью'),
+        ('white',   'Белая'),
+        ('cream',   'Молочная'),
+        ('black',   'Чёрная'),
+        ('pink',    'Розовая'),
+    ]
+
     return render_template(
         'orders/new.html',
         time_slots=TIME_SLOTS,
+        delivery_dates=DELIVERY_DATES,
+        default_delivery_date=DEFAULT_DELIVERY_DATE,
         varieties=varieties,
         wrapping=wrapping,
         ribbons=ribbons,
+        tissue_options=tissue_options,
         settings=settings,
     )
 
@@ -222,11 +244,13 @@ def create_order_route():
         'recipient_phone':  request.form.get('recipient_phone', '').strip(),
         'is_pickup':        request.form.get('is_pickup', '0'),
         'delivery_address': request.form.get('delivery_address', '').strip(),
+        'delivery_date':    request.form.get('delivery_date', DEFAULT_DELIVERY_DATE).strip(),
         'desired_time':     request.form.get('desired_time', '').strip(),
         'has_note':         request.form.get('has_note', ''),
         'note_text':        request.form.get('note_text', '').strip(),
         'wrapping_id':      request.form.get('wrapping_id', '').strip(),
         'ribbon_color_id':  request.form.get('ribbon_color_id', '').strip(),
+        'tissue':           request.form.get('tissue', 'florist').strip(),
         'variety_ids':      request.form.getlist('variety_id[]'),
         'quantities':       request.form.getlist('quantity[]'),
     }
@@ -244,7 +268,17 @@ def create_order_route():
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _fetch_orders(db, status_filter='', q=''):
+def _date_counts(db) -> dict:
+    """Return a dict of {delivery_date: order_count} for non-cancelled orders."""
+    rows = db.execute(
+        "SELECT delivery_date, COUNT(*) AS cnt FROM orders "
+        "WHERE order_status != 'cancelled' "
+        "GROUP BY delivery_date"
+    ).fetchall()
+    return {row['delivery_date']: row['cnt'] for row in rows}
+
+
+def _fetch_orders(db, status_filter='', q='', date_filter=''):
     """Build and execute the order list query with optional filters.
 
     Args:
@@ -253,6 +287,8 @@ def _fetch_orders(db, status_filter='', q=''):
             ``order_status`` value.
         q: Free-text search term matched against ``order_number``,
             ``recipient_name``, and ``recipient_phone``.
+        date_filter: If non-empty, restrict results to this
+            ``delivery_date`` value (e.g. ``'2025-03-08'``).
 
     Returns:
         List of ``sqlite3.Row`` objects ordered by ``created_at DESC``.
@@ -263,6 +299,10 @@ def _fetch_orders(db, status_filter='', q=''):
     if status_filter:
         where.append('o.order_status = ?')
         params.append(status_filter)
+
+    if date_filter:
+        where.append('o.delivery_date = ?')
+        params.append(date_filter)
 
     if q:
         like = f'%{q}%'
@@ -298,13 +338,19 @@ def order_list():
         Rendered ``orders/index.html`` template.
     """
     status_filter = request.args.get('status', '').strip()
+    date_filter   = request.args.get('date', '').strip()
     q             = request.args.get('q', '').strip()
     db            = get_db()
-    orders        = _fetch_orders(db, status_filter, q)
+    date_counts   = _date_counts(db)
+    orders        = _fetch_orders(db, status_filter, q, date_filter)
     return render_template(
         'orders/index.html',
         orders=orders,
         status_filter=status_filter,
+        date_filter=date_filter,
+        date_counts=date_counts,
+        total_count=sum(date_counts.values()),
+        delivery_dates=DELIVERY_DATES,
         q=q,
         STATUS_LABELS=STATUS_LABELS,
     )
@@ -322,8 +368,9 @@ def order_list_partial():
         Rendered ``orders/_list.html`` partial template.
     """
     status_filter = request.args.get('status', '').strip()
+    date_filter   = request.args.get('date', '').strip()
     q             = request.args.get('q', '').strip()
-    orders        = _fetch_orders(get_db(), status_filter, q)
+    orders        = _fetch_orders(get_db(), status_filter, q, date_filter)
     return render_template('orders/_list.html', orders=orders)
 
 
@@ -424,6 +471,60 @@ def cancel_order_route(order_id):
     except ValueError as exc:
         flash(str(exc), 'error')
     return redirect(f'/orders/{order_id}')
+
+
+# ---------------------------------------------------------------------------
+# POST /orders/<id>/recipient  — update recipient info for an order
+# ---------------------------------------------------------------------------
+
+@orders_bp.route('/<int:order_id>/recipient', methods=['POST'])
+def update_order_recipient(order_id):
+    """Save or update recipient info (name, phone, address) for an existing order.
+
+    Accepts an optional ``next`` form field to redirect back to the calling
+    page (e.g. ``/orders/recipients``); falls back to the order detail page.
+
+    Args:
+        order_id: Primary key of the order to update.
+
+    Returns:
+        Redirect to ``next`` URL or ``/orders/<id>``.
+    """
+    data = {
+        'recipient_name':   request.form.get('recipient_name', '').strip(),
+        'recipient_phone':  request.form.get('recipient_phone', '').strip(),
+        'delivery_address': request.form.get('delivery_address', '').strip(),
+    }
+    next_url = request.form.get('next') or f'/orders/{order_id}'
+    try:
+        update_recipient(get_db(), order_id, data)
+        flash('Получатель сохранён', 'success')
+    except ValueError as exc:
+        flash(str(exc), 'error')
+    return redirect(next_url)
+
+
+# ---------------------------------------------------------------------------
+# GET /orders/recipients  — list of orders without recipient info
+# ---------------------------------------------------------------------------
+
+@orders_bp.route('/recipients')
+def recipients_list():
+    """Page for filling in recipient details for orders that are missing them.
+
+    Returns:
+        Rendered ``orders/recipients.html`` template.
+    """
+    db = get_db()
+    orders = db.execute(
+        """SELECT o.*, c.name AS customer_name, c.phone AS customer_phone
+             FROM orders o
+             JOIN customers c ON o.customer_id = c.id
+            WHERE o.order_status NOT IN ('cancelled', 'done')
+              AND (o.recipient_name = '' OR o.recipient_phone = '')
+            ORDER BY o.delivery_date, o.created_at"""
+    ).fetchall()
+    return render_template('orders/recipients.html', orders=orders)
 
 
 # ---------------------------------------------------------------------------

@@ -100,19 +100,85 @@
 
 {# ── Recipient ── #}
 <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
-  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Получатель</h2>
-  <p class="font-semibold text-gray-900">{{ order['recipient_name'] }}</p>
-  <p class="text-sm text-gray-600">{{ order['recipient_phone'] }}</p>
+  <div class="flex items-center justify-between mb-2">
+    <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Получатель</h2>
+    <button type="button" onclick="toggleRecipientEdit()"
+            class="text-xs text-pink-600 font-medium px-2 py-0.5 rounded-lg
+                   hover:bg-pink-50 active:bg-pink-100 transition">
+      Изменить
+    </button>
+  </div>
 
-  {% if order['is_pickup'] %}
-    <p class="mt-2 text-sm text-gray-700">🏪 Самовывоз</p>
-  {% else %}
-    <p class="mt-2 text-sm text-gray-700">🚚 {{ order['delivery_address'] }}</p>
-  {% endif %}
+  {# View mode #}
+  <div id="recipient-view">
+    {% if order['recipient_name'] %}
+      <p class="font-semibold text-gray-900">{{ order['recipient_name'] }}</p>
+    {% else %}
+      <p class="text-amber-600 text-sm font-medium">⚠ Имя не указано</p>
+    {% endif %}
+    {% if order['recipient_phone'] %}
+      <p class="text-sm text-gray-600">{{ order['recipient_phone'] }}</p>
+    {% endif %}
 
-  {% if order['desired_time'] %}
-    <p class="text-sm text-gray-500 mt-1">⏰ {{ order['desired_time'] }}</p>
-  {% endif %}
+    {% if order['is_pickup'] %}
+      <p class="mt-2 text-sm text-gray-700">🏪 Самовывоз</p>
+    {% else %}
+      {% if order['delivery_address'] %}
+        <p class="mt-2 text-sm text-gray-700">🚚 {{ order['delivery_address'] }}</p>
+      {% else %}
+        <p class="mt-2 text-sm text-amber-600">⚠ Адрес не указан</p>
+      {% endif %}
+    {% endif %}
+
+    {% if order['desired_time'] %}
+      <p class="text-sm text-gray-500 mt-1">⏰ {{ order['desired_time'] }}</p>
+    {% endif %}
+  </div>
+
+  {# Edit mode (hidden by default) #}
+  <div id="recipient-edit" class="hidden mt-3 pt-3 border-t border-gray-100">
+    <form method="post" action="/orders/{{ order['id'] }}/recipient">
+      <div class="mb-2">
+        <label class="block text-xs text-gray-500 mb-1">Имя получателя</label>
+        <input type="text" name="recipient_name"
+               value="{{ order['recipient_name'] }}"
+               placeholder="Мария"
+               class="w-full rounded-xl border border-gray-200 text-base px-3 py-2.5
+                      bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
+      </div>
+      <div class="mb-2">
+        <label class="block text-xs text-gray-500 mb-1">Телефон получателя</label>
+        <input type="tel" name="recipient_phone"
+               value="{{ order['recipient_phone'] }}"
+               placeholder="+380" inputmode="tel"
+               oninput="formatPhoneDet(this)"
+               class="w-full rounded-xl border border-gray-200 text-base px-3 py-2.5
+                      bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
+      </div>
+      {% if not order['is_pickup'] %}
+      <div class="mb-3">
+        <label class="block text-xs text-gray-500 mb-1">Адрес доставки</label>
+        <textarea name="delivery_address" rows="2"
+                  placeholder="Улица, дом, кв."
+                  class="w-full rounded-xl border border-gray-200 text-base px-3 py-2.5
+                         bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                         resize-none">{{ order['delivery_address'] or '' }}</textarea>
+      </div>
+      {% endif %}
+      <div class="flex gap-2">
+        <button type="button" onclick="toggleRecipientEdit()"
+                class="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600
+                       text-sm font-medium bg-white active:bg-gray-50 transition">
+          Отмена
+        </button>
+        <button type="submit"
+                class="flex-1 py-2.5 rounded-xl bg-pink-600 text-white
+                       text-sm font-semibold active:bg-pink-700 transition">
+          Сохранить
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
 
 {# ── Customer ── #}
@@ -148,10 +214,41 @@
     </tbody>
   </table>
 
-  {# Wrapping & ribbon #}
-  <div class="flex gap-4 text-sm text-gray-600 mb-2">
-    <span>🎁 {{ order['wrapping_name'] or 'Без упаковки' }}</span>
-    <span>🎀 {{ order['ribbon_name'] }}</span>
+  {# Wrapping, ribbon, tissue #}
+  {% set tissue_labels = {
+       'florist': 'Выбор флориста',
+       'none':    'Без тишью',
+       'white':   'Белая',
+       'cream':   'Молочная',
+       'black':   'Чёрная',
+       'pink':    'Розовая',
+  } %}
+  <div class="space-y-1 text-sm text-gray-600 mb-2">
+    <div>
+      🎁 <strong class="text-gray-700">Упаковка:</strong>
+      {% if order['wrapping_name'] == 'Выбор флориста' or not order['wrapping_name'] %}
+        <span class="text-gray-400 italic">Упаковка любая</span>
+      {% else %}
+        {{ order['wrapping_name'] }}
+      {% endif %}
+    </div>
+    <div>
+      🎀 <strong class="text-gray-700">Лента:</strong>
+      {% if order['ribbon_name'] == 'Выбор флориста' %}
+        <span class="text-gray-400 italic">Лента любая</span>
+      {% else %}
+        {{ order['ribbon_name'] }}
+      {% endif %}
+    </div>
+    <div>
+      🌸 <strong class="text-gray-700">Тишью:</strong>
+      {% set t = order['tissue'] if order['tissue'] else 'florist' %}
+      {% if t == 'florist' %}
+        <span class="text-gray-400 italic">Тишью любая</span>
+      {% else %}
+        {{ tissue_labels.get(t, t) }}
+      {% endif %}
+    </div>
   </div>
 
   {# Note #}
@@ -173,7 +270,7 @@
     </div>
     {% if order['wrapping_price'] > 0 %}
     <div class="flex justify-between text-gray-600">
-      <span>Упаковка</span>
+      <span>Упаковка + тишью</span>
       <span>{{ "%.0f"|format(order['wrapping_price']) }} ₴</span>
     </div>
     {% endif %}
@@ -201,4 +298,22 @@
 {# Back link #}
 <a href="/orders" class="block text-center text-sm text-gray-400 py-2 mt-1">← К списку заказов</a>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleRecipientEdit() {
+  document.getElementById('recipient-view').classList.toggle('hidden');
+  document.getElementById('recipient-edit').classList.toggle('hidden');
+}
+
+function formatPhoneDet(el) {
+  let d = el.value.replace(/\D/g, '');
+  if (!d) { el.value = ''; return; }
+  if (d.startsWith('380'))      d = d.slice(3);
+  else if (d.startsWith('38'))  d = d.slice(2);
+  else if (d.startsWith('0'))   d = d.slice(1);
+  el.value = '+380' + d.slice(0, 9);
+}
+</script>
 {% endblock %}

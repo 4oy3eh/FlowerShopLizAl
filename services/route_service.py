@@ -58,24 +58,26 @@ def generate_google_maps_url(db, route_id: int) -> str:
     return url
 
 
-def generate_route(db, time_slot: str, max_orders: int = 15) -> int:
-    """Generate a delivery route for the given time slot.
+def generate_route(db, time_slot: str, delivery_date: str,
+                   max_orders: int = 15) -> int:
+    """Generate a delivery route for a specific date and time slot.
 
     Selects eligible orders and groups them into a new route record.
     Steps:
 
     1. Select orders: ``status='ready'``, ``is_pickup=0``,
-       ``route_id IS NULL``, ``desired_time = time_slot``, up to
-       ``max_orders``.
-    2. Calculate a sequential ``route_number`` for today.
-    3. INSERT a ``delivery_routes`` record.
+       ``route_id IS NULL``, ``delivery_date = delivery_date``,
+       ``desired_time = time_slot``, up to ``max_orders``.
+    2. Calculate a sequential ``route_number`` per delivery date.
+    3. INSERT a ``delivery_routes`` record with ``delivery_date``.
     4. UPDATE selected orders with ``route_id`` and ``route_order``.
     5. Generate and persist the Google Maps URL via
        :func:`generate_google_maps_url`.
 
     Args:
         db: Active SQLite connection.
-        time_slot: Delivery time window string, e.g. ``'10-12'``.
+        time_slot: Delivery time window string, e.g. ``'10:00-12:00'``.
+        delivery_date: ISO date string, e.g. ``'2025-03-08'``.
         max_orders: Maximum number of orders to include in the route.
             Defaults to ``15``.
 
@@ -85,30 +87,30 @@ def generate_route(db, time_slot: str, max_orders: int = 15) -> int:
 
     Raises:
         ValueError: If there are no eligible (ready, unrouted) orders
-            for the given time slot.
+            for the given date and time slot.
     """
-    # 1. Select eligible orders (stable ordering by id)
+    # 1. Select eligible orders filtered by date + slot (stable ordering by id)
     orders = db.execute(
         """SELECT id FROM orders
             WHERE order_status = 'ready'
               AND is_pickup     = 0
               AND route_id      IS NULL
+              AND delivery_date = ?
               AND desired_time  = ?
             ORDER BY id
             LIMIT ?""",
-        (time_slot, max_orders),
+        (delivery_date, time_slot, max_orders),
     ).fetchall()
 
     if not orders:
         raise ValueError(
-            f'Нет готовых заказов к доставке для временного слота «{time_slot}»'
+            f'Нет готовых заказов для {delivery_date} в слоте «{time_slot}»'
         )
 
-    # 2. Route number — how many routes were created today + 1
-    today = date.today().isoformat()
+    # 2. Route number — sequential per delivery date
     existing = db.execute(
-        "SELECT COUNT(*) FROM delivery_routes WHERE date(created_at) = ?",
-        (today,),
+        "SELECT COUNT(*) FROM delivery_routes WHERE delivery_date = ?",
+        (delivery_date,),
     ).fetchone()[0]
     route_number = existing + 1
 
@@ -118,9 +120,9 @@ def generate_route(db, time_slot: str, max_orders: int = 15) -> int:
         # 3. INSERT delivery_routes
         db.execute(
             """INSERT INTO delivery_routes
-                   (route_number, status, planned_start, total_orders)
-               VALUES (?, 'planning', ?, ?)""",
-            (route_number, time_slot, total),
+                   (route_number, status, planned_start, total_orders, delivery_date)
+               VALUES (?, 'planning', ?, ?, ?)""",
+            (route_number, time_slot, total, delivery_date),
         )
         route_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
 

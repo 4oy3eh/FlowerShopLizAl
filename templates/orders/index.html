@@ -9,11 +9,19 @@
     Заказы
     <span class="ml-1 text-base font-normal text-gray-400">({{ orders | length }})</span>
   </h1>
-  <a href="/orders/new"
-     class="px-4 py-2 rounded-xl bg-pink-600 text-white text-sm font-medium
-            active:bg-pink-700 transition">
-    + Новый
-  </a>
+  <div class="flex items-center gap-2">
+    <a href="/orders/recipients"
+       class="text-xs font-medium px-2.5 py-1.5 rounded-lg
+              bg-amber-50 text-amber-700 border border-amber-200
+              active:bg-amber-100 transition">
+      👤 Получатели
+    </a>
+    <a href="/orders/new"
+       class="px-4 py-2 rounded-xl bg-pink-600 text-white text-sm font-medium
+              active:bg-pink-700 transition">
+      + Новый
+    </a>
+  </div>
 </div>
 
 {# ── Filter form — changes trigger HTMX reload of #orders-list ── #}
@@ -23,6 +31,23 @@
       hx-trigger="change, submit"
       hx-swap="innerHTML"
       class="mb-4">
+
+  {# Date filter tabs #}
+  <div class="flex gap-1.5 overflow-x-auto pb-2 mb-3 scrollbar-none">
+    <button type="button" name="date" value=""
+            class="date-tab shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition
+                   {% if not date_filter %}bg-pink-600 text-white{% else %}bg-white border border-gray-200 text-gray-600{% endif %}">
+      Все{% if total_count %} ({{ total_count }}){% endif %}
+    </button>
+    {% for d in delivery_dates %}
+    <button type="button" name="date" value="{{ d.value }}"
+            class="date-tab shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition
+                   {% if date_filter == d.value %}bg-pink-600 text-white{% else %}bg-white border border-gray-200 text-gray-600{% endif %}">
+      {{ d.label }}{% if date_counts.get(d.value) %} ({{ date_counts[d.value] }}){% endif %}
+    </button>
+    {% endfor %}
+  </div>
+  <input type="hidden" name="date" id="date-hidden" value="{{ date_filter }}">
 
   {# Status filter tabs #}
   <div class="flex gap-1.5 overflow-x-auto pb-2 mb-3 scrollbar-none">
@@ -67,6 +92,14 @@
 
 {% block scripts %}
 <script>
+  // Date tab buttons
+  document.querySelectorAll('.date-tab').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.getElementById('date-hidden').value = this.value;
+      htmx.trigger('#filter-form', 'submit');
+    });
+  });
+
   // Status tab buttons write their value into the hidden field then submit
   document.querySelectorAll('#filter-form button[name="status"]').forEach(btn => {
     btn.addEventListener('click', function(e) {

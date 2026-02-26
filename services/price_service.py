@@ -7,7 +7,7 @@ already-created orders.
 """
 
 
-def snapshot_prices(db, variety_id_qty_pairs, wrapping_id, has_note, is_pickup):
+def snapshot_prices(db, variety_id_qty_pairs, wrapping_id, tissue, has_note, is_pickup):
     """Fix all prices at order-creation time (business rule R1).
 
     Reads current prices from the database and assembles a complete price
@@ -19,6 +19,9 @@ def snapshot_prices(db, variety_id_qty_pairs, wrapping_id, has_note, is_pickup):
         variety_id_qty_pairs: List of ``(variety_id, quantity)`` tuples.
         wrapping_id: Primary key in ``wrapping_options``, or ``None`` for
             no wrapping.
+        tissue: Tissue value string — 'florist', 'none', 'white', 'cream',
+            'black', or 'pink'.  Anything other than 'none' counts as
+            "tissue present" and contributes to the packaging combo price.
         has_note: ``True`` if the order includes a greeting note.
         is_pickup: ``True`` if the customer picks up the order (no delivery
             charge applied).
@@ -54,16 +57,27 @@ def snapshot_prices(db, variety_id_qty_pairs, wrapping_id, has_note, is_pickup):
         })
         flowers_total += line_total
 
-    # Wrapping — snapshot current price (NULL → 0)
+    # Packaging combo (wrapping + tissue) — flat rate from system_settings.
+    # The rule: charge packaging_price (120 грн) when ANY packaging is present.
+    # Wrapping is "present" if a wrapping_id is provided (including "Выбор флориста").
+    # Tissue is "present" if tissue is anything other than 'none'.
+    # Ribbon is always free (no price column in ribbon_colors).
     wrapping_price = 0.0
-    if wrapping_id:
+    wrapping_present = bool(wrapping_id)
+    tissue_present   = bool(tissue) and tissue != 'none'
+    if wrapping_present or tissue_present:
         row = db.execute(
-            'SELECT current_price FROM wrapping_options WHERE id = ? AND is_active = 1',
+            "SELECT value FROM system_settings WHERE key = 'packaging_price'"
+        ).fetchone()
+        wrapping_price = float(row['value']) if row else 120.0
+    # Validate that the wrapping option actually exists (if specified)
+    if wrapping_id:
+        exists = db.execute(
+            'SELECT 1 FROM wrapping_options WHERE id = ? AND is_active = 1',
             (wrapping_id,)
         ).fetchone()
-        if row is None:
+        if exists is None:
             raise ValueError(f'Упаковка #{wrapping_id} не найдена')
-        wrapping_price = row['current_price']
 
     # Note — price from system_settings
     note_price = 0.0

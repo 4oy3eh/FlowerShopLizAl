@@ -138,11 +138,16 @@
 <div class="order-block">
 
   {# Header #}
-  <div class="block-label">Сборочный лист · Маршрут {{ route['route_number'] }}</div>
+  <div class="block-label">Сборочный лист · Маршрут {{ route['route_number'] }}
+    {%- if route['delivery_date'] %} · {{ route['delivery_date'].split('-')[2] | int }} марта{% endif %}
+  </div>
   <div class="block-order-num">#{{ order['order_number'] }}</div>
   <div class="block-recipient">→ {{ order['recipient_name'] }}</div>
   <div class="block-meta">
     <span class="route-badge">Стоп {{ order['route_order'] }}</span>
+    {% if route['delivery_date'] %}
+    <span class="route-badge">📅 {{ route['delivery_date'].split('-')[2] | int }} марта</span>
+    {% endif %}
     {% if order['desired_time'] %}
     <span class="route-badge">⏰ {{ order['desired_time'] }}</span>
     {% endif %}
@@ -169,12 +174,35 @@
     </tbody>
   </table>
 
-  {# Wrapping & ribbon #}
+  {# Wrapping, ribbon, tissue #}
+  {% set tissue_labels = {
+       'florist': 'Тишью любая',
+       'none':    'Без тишью',
+       'white':   'Белая',
+       'cream':   'Молочная',
+       'black':   'Чёрная',
+       'pink':    'Розовая',
+  } %}
   <div class="meta-row">
-    🎁 <strong>Упаковка:</strong> {{ order['wrapping_name'] or 'Без упаковки' }}
+    🎁 <strong>Упаковка:</strong>
+    {% if order['wrapping_name'] == 'Выбор флориста' or not order['wrapping_name'] %}
+      Упаковка любая
+    {% else %}
+      {{ order['wrapping_name'] }}
+    {% endif %}
   </div>
   <div class="meta-row">
-    🎀 <strong>Лента:</strong> {{ order['ribbon_name'] }}
+    🎀 <strong>Лента:</strong>
+    {% if order['ribbon_name'] == 'Выбор флориста' %}
+      Лента любая
+    {% else %}
+      {{ order['ribbon_name'] }}
+    {% endif %}
+  </div>
+  <div class="meta-row">
+    🌸 <strong>Тишью:</strong>
+    {% set t = order['tissue'] if order['tissue'] else 'florist' %}
+    {{ tissue_labels.get(t, t) }}
   </div>
 
   {# Note #}

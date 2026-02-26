@@ -110,14 +110,14 @@
 
       {# ---- Recipient ---- #}
       <div class="mb-6">
-        <h2 class="text-base font-semibold text-gray-700 mb-3">Получатель</h2>
+        <h2 class="text-base font-semibold text-gray-700 mb-1">Получатель</h2>
+        <p class="text-xs text-gray-400 mb-3">Можно заполнить позже</p>
 
         {# Recipient phone #}
         <div class="mb-4">
           <label class="block text-sm text-gray-600 mb-1.5"
                  for="recipient-phone-input">
             Телефон получателя
-            <span class="text-red-500 ml-0.5">*</span>
           </label>
           <input
             type="tel"
@@ -136,7 +136,6 @@
           <label class="block text-sm text-gray-600 mb-1.5"
                  for="recipient-name-input">
             Имя получателя
-            <span class="text-red-500 ml-0.5">*</span>
           </label>
           <input
             type="text"
@@ -185,6 +184,26 @@
           ></textarea>
         </div>
       </div>{# /delivery #}
+
+      {# ---- Delivery date ---- #}
+      <div class="mb-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+          Дата доставки &mdash; <span class="font-normal text-gray-500">Марта</span>
+        </label>
+        <div class="flex gap-1.5">
+          {% for d in delivery_dates %}
+          <button
+            type="button"
+            data-date="{{ d.value }}"
+            onclick="selectDate(this)"
+            class="date-btn flex-1 py-3 rounded-xl text-base font-bold transition
+                   {% if d.value == default_delivery_date %}bg-pink-600 text-white{% else %}bg-white text-gray-600 border border-gray-300{% endif %}"
+          >{{ d.label }}</button>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="delivery_date" id="delivery_date_input"
+               value="{{ default_delivery_date }}">
+      </div>
 
       {# ---- Desired time ---- #}
       <div class="mb-8">
@@ -298,19 +317,63 @@
         </button>
       </div>{# /flowers section #}
 
-      {# ---- Wrapping ---- #}
+      {# ---- Wrapping (required, default = Выбор флориста) ---- #}
       <div class="mb-4">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">Упаковка</label>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          Упаковка <span class="text-red-500">*</span>
+        </label>
         <div class="relative">
           <select name="wrapping_id" id="wrapping-select"
                   class="w-full rounded-xl border border-gray-300 text-base px-4 py-3.5
                          bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
                          appearance-none pr-10"
                   onchange="recalcTotal()">
-            <option value="" data-price="0">Без упаковки — 0 ₴</option>
+            {% set ns = namespace(prev_type='') %}
             {% for w in wrapping %}
-            <option value="{{ w.id }}" data-price="{{ w.current_price }}">
-              {{ w.name }} — {{ w.current_price | int }} ₴
+              {% if w.wrapping_type != ns.prev_type %}
+                {# Close previous optgroup if open #}
+                {% if ns.prev_type and ns.prev_type != 'florist' %}</optgroup>{% endif %}
+                {# Open new optgroup for non-florist types #}
+                {% if w.wrapping_type != 'florist' %}
+                  <optgroup label="{{ w.wrapping_type | capitalize }}">
+                {% endif %}
+                {% set ns.prev_type = w.wrapping_type %}
+              {% endif %}
+              <option value="{{ w.id }}" data-price="{{ w.current_price }}"
+                      {% if loop.first %}selected{% endif %}>
+                {%- if w.wrapping_type == 'florist' -%}
+                  Выбор флориста
+                {%- else -%}
+                  {{ w.name.split(' ', 1)[1] if ' ' in w.name else w.name }}
+                  {%- if w.current_price > 0 %} — {{ w.current_price | int }} ₴{% endif %}
+                {%- endif -%}
+              </option>
+            {% endfor %}
+            {# Close last optgroup if not florist #}
+            {% if ns.prev_type and ns.prev_type != 'florist' %}</optgroup>{% endif %}
+          </select>
+          <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+            <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {# ---- Ribbon (required, default = Выбор флориста) ---- #}
+      <div class="mb-4">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          Лента <span class="text-red-500">*</span>
+        </label>
+        <div class="relative">
+          <select name="ribbon_color_id" id="ribbon-select"
+                  class="w-full rounded-xl border border-gray-300 text-base px-4 py-3.5
+                         bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                         appearance-none pr-10">
+            {% for r in ribbons %}
+            <option value="{{ r.id }}" {% if loop.first %}selected{% endif %}>
+              {{ r.name }}
             </option>
             {% endfor %}
           </select>
@@ -323,19 +386,17 @@
         </div>
       </div>
 
-      {# ---- Ribbon (required — V2) ---- #}
+      {# ---- Тишью ---- #}
       <div class="mb-6">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">
-          Лента <span class="text-red-500">*</span>
-        </label>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Тишью</label>
         <div class="relative">
-          <select name="ribbon_color_id" id="ribbon-select"
+          <select name="tissue" id="tissue-select"
                   class="w-full rounded-xl border border-gray-300 text-base px-4 py-3.5
                          bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
-                         appearance-none pr-10">
-            <option value="">Выберите цвет</option>
-            {% for r in ribbons %}
-            <option value="{{ r.id }}">{{ r.name }}</option>
+                         appearance-none pr-10"
+                  onchange="recalcTotal()">
+            {% for val, label in tissue_options %}
+            <option value="{{ val }}" {% if loop.first %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
           <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
@@ -379,7 +440,7 @@
             <span><span id="sum-flowers">0</span> ₴</span>
           </div>
           <div class="flex justify-between text-gray-600">
-            <span>Упаковка</span>
+            <span>Упаковка + тишью</span>
             <span><span id="sum-wrapping">0</span> ₴</span>
           </div>
           <div id="note-price-row" class="hidden flex justify-between text-gray-600">
@@ -454,6 +515,14 @@
 // ---------------------------------------------------------------------------
 const VARIETIES = {{ varieties | tojson }};
 const SETTINGS  = {{ settings  | tojson }};
+const TISSUE_LABELS = {
+  florist: 'Выбор флориста',
+  none:    'Без тишью',
+  white:   'Белая',
+  cream:   'Молочная',
+  black:   'Чёрная',
+  pink:    'Розовая',
+};
 
 // ---------------------------------------------------------------------------
 // Phone formatting: normalise any input to +380XXXXXXXXX
@@ -491,6 +560,22 @@ function setPickup(isPickup) {
 }
 
 // ---------------------------------------------------------------------------
+// Delivery date picker
+// ---------------------------------------------------------------------------
+function selectDate(btn) {
+  document.querySelectorAll('.date-btn').forEach(b => {
+    const active = b === btn;
+    b.classList.toggle('bg-pink-600',     active);
+    b.classList.toggle('text-white',      active);
+    b.classList.toggle('bg-white',       !active);
+    b.classList.toggle('text-gray-600',  !active);
+    b.classList.toggle('border',         !active);
+    b.classList.toggle('border-gray-300',!active);
+  });
+  document.getElementById('delivery_date_input').value = btn.dataset.date;
+}
+
+// ---------------------------------------------------------------------------
 // Step navigation
 // ---------------------------------------------------------------------------
 const STEP_CLS = {
@@ -524,27 +609,10 @@ function goToStep(n) {
 }
 
 // ---------------------------------------------------------------------------
-// Step 1 → Step 2: validate before advancing
+// Step 1 → Step 2: recipient fields are optional — just advance
 // ---------------------------------------------------------------------------
 function goToStep2() {
-  const recipientName  = document.getElementById('recipient-name-input').value.trim();
-  const recipientPhone = document.getElementById('recipient-phone-input').value.trim();
-  const errEl = document.getElementById('step1-error');
-
-  if (!recipientName) {
-    errEl.textContent = 'Укажите имя получателя';
-    errEl.classList.remove('hidden');
-    document.getElementById('recipient-name-input').focus();
-    return;
-  }
-  if (recipientPhone.length < 13) {
-    errEl.textContent = 'Укажите телефон получателя в формате +380XXXXXXXXX';
-    errEl.classList.remove('hidden');
-    document.getElementById('recipient-phone-input').focus();
-    return;
-  }
-
-  errEl.classList.add('hidden');
+  document.getElementById('step1-error').classList.add('hidden');
   goToStep(2);
   recalcTotal();   // initialise price summary with current delivery choice
 }
@@ -726,10 +794,15 @@ function recalcTotal() {
     updateRowPrice(row);
   });
 
-  // Wrapping
-  const wrappingSelect = document.getElementById('wrapping-select');
-  const wrappingOpt    = wrappingSelect.options[wrappingSelect.selectedIndex];
-  const wrappingPrice  = wrappingOpt ? parseFloat(wrappingOpt.dataset.price || 0) : 0;
+  // Packaging combo: flat packaging_price if any wrapping OR any tissue is present.
+  // Ribbon is always free.
+  const wrappingSelect  = document.getElementById('wrapping-select');
+  const hasWrapping     = Boolean(wrappingSelect && wrappingSelect.value);
+  const tissueSelectEl  = document.getElementById('tissue-select');
+  const tissueValNow    = tissueSelectEl ? tissueSelectEl.value : 'none';
+  const hasTissue       = tissueValNow && tissueValNow !== 'none';
+  const packagingPrice  = parseFloat(SETTINGS.packaging_price || 120);
+  const wrappingPrice   = (hasWrapping || hasTissue) ? packagingPrice : 0;
 
   // Note (V4)
   const hasNote   = document.getElementById('has-note-cb').checked;
@@ -777,14 +850,6 @@ function goToStep3() {
   if (!checkAllRowsStock()) {
     errEl.textContent = 'Запрошенное количество превышает остаток на складе';
     errEl.classList.remove('hidden');
-    return;
-  }
-
-  // V2: ribbon required
-  if (!document.getElementById('ribbon-select').value) {
-    errEl.textContent = 'Выберите цвет ленты';
-    errEl.classList.remove('hidden');
-    document.getElementById('ribbon-select').focus();
     return;
   }
 
@@ -843,6 +908,8 @@ function buildSummary() {
   const recPhone = esc(document.getElementById('recipient-phone-input').value);
   const address  = esc(document.querySelector('[name="delivery_address"]').value || '');
   const time     = esc(document.querySelector('[name="desired_time"]').value     || '');
+  const activeDateBtn   = document.querySelector('.date-btn.bg-pink-600');
+  const deliveryDateLbl = activeDateBtn ? activeDateBtn.textContent.trim() : '';
 
   // ── Varieties ────────────────────────────────────────────────────────
   let varietyRows = [];
@@ -857,14 +924,27 @@ function buildSummary() {
   });
 
   // ── Wrapping ─────────────────────────────────────────────────────────
-  const wrapSel  = document.getElementById('wrapping-select');
-  const wrapOpt  = wrapSel.options[wrapSel.selectedIndex];
-  const wrapName = esc(wrapOpt ? wrapOpt.text.split(' —')[0].trim() : 'Без упаковки');
+  const wrapSel   = document.getElementById('wrapping-select');
+  const wrapOpt   = wrapSel.options[wrapSel.selectedIndex];
+  const wrapRaw   = wrapOpt ? wrapOpt.text.split(' —')[0].trim() : '';
+  const wrapName  = esc(wrapRaw === 'Выбор флориста' ? 'Выбор флориста' : wrapRaw);
+  // Full label including category prefix (optgroup label + option text)
+  const wrapGroup = wrapOpt && wrapOpt.parentElement.tagName === 'OPTGROUP'
+                    ? wrapOpt.parentElement.label + ' ' + wrapRaw
+                    : wrapRaw;
+  const wrapLabel = esc(wrapOpt && wrapOpt.text.split(' —')[0].trim() === 'Выбор флориста'
+                        ? 'Выбор флориста'
+                        : wrapGroup);
 
   // ── Ribbon ───────────────────────────────────────────────────────────
   const ribSel  = document.getElementById('ribbon-select');
   const ribOpt  = ribSel.options[ribSel.selectedIndex];
-  const ribName = esc(ribOpt ? ribOpt.text : '');
+  const ribName = esc(ribOpt ? ribOpt.text.trim() : '');
+
+  // ── Tissue ───────────────────────────────────────────────────────────
+  const tissueSel = document.getElementById('tissue-select');
+  const tissueVal = tissueSel ? tissueSel.value : 'florist';
+  const tissueName = esc(TISSUE_LABELS[tissueVal] || tissueVal);
 
   // ── Note ─────────────────────────────────────────────────────────────
   const hasNote  = document.getElementById('has-note-cb').checked;
@@ -880,11 +960,12 @@ function buildSummary() {
 
   const html =
     summaryCard('Получатель', [
-      ['Имя',     recName],
-      ['Телефон', recPhone],
+      ['Имя',     recName  || '(не указано)'],
+      recPhone ? ['Телефон', recPhone] : null,
       isPickup
         ? ['Получение', '🏪 Самовывоз']
-        : ['Адрес',     `📍 ${address || '—'}`],
+        : ['Адрес',     `📍 ${address || '(не указан)'}`],
+      deliveryDateLbl ? ['Дата', `📅 ${deliveryDateLbl} Марта`] : null,
       time ? ['Время', `⏰ ${time}`] : null,
     ]) +
     summaryCard('Заказчик', [
@@ -893,8 +974,9 @@ function buildSummary() {
     ]) +
     summaryCard('Букет', [
       ...varietyRows,
-      ['Упаковка', wrapName],
+      ['Упаковка', wrapLabel],
       ['Лента',    ribName],
+      ['Тишью',    tissueName],
       hasNote ? ['Записка', `«${noteText}»`] : null,
     ]) +
     `<div class="rounded-xl bg-pink-50 border border-pink-100 p-4">

@@ -48,23 +48,30 @@ VARIETIES: list[tuple] = [
     ('Gaston',            'персиковый',        20.0, 55.0, 100),
 ]
 
-# (name, price)
+# (name, wrapping_type, price)
 # Prices are defaults — admin can update via /pricing.
 # "Без упаковки" is intentionally absent: the schema uses wrapping_id = NULL for that case.
+# "Выбор флориста" = florist picks any available wrapping (price = 0, resolved at assembly).
 WRAPPING: list[tuple] = [
-    ('Калька розовая',            30.0),
-    ('Калька белая',              30.0),
-    ('Калька жёлтая',             30.0),
-    ('Калька сиреневая',          30.0),
-    ('Калька прозрачная-матовая', 30.0),
-    ('Каффен белый',              40.0),
-    ('Каффен розовый',            40.0),
-    ('Каффен серый',              40.0),
-    ('Каффен чёрный',             40.0),
-    ('Тиш',                       25.0),
+    ('Выбор флориста',        'florist',   0.0),
+    # Замшевая
+    ('Замшевая молочная',     'замшевая',  40.0),
+    ('Замшевая розовая',      'замшевая',  40.0),
+    ('Замшевая чёрная',       'замшевая',  40.0),
+    ('Замшевая красная',      'замшевая',  40.0),
+    # Каффин
+    ('Каффин белый',          'каффин',    40.0),
+    ('Каффин чёрный',         'каффин',    40.0),
+    ('Каффин серый',          'каффин',    40.0),
+    ('Каффин розовый',        'каффин',    40.0),
+    # Плёнка
+    ('Пленка прозрачная матовая', 'пленка', 30.0),
+    ('Пленка белая',          'пленка',    30.0),
+    ('Пленка чёрная',         'пленка',    30.0),
 ]
 
 RIBBONS: list[str] = [
+    'Выбор флориста',
     'Красная',
     'Белая',
     'Розовая',
@@ -78,6 +85,7 @@ RIBBONS: list[str] = [
 SETTINGS: dict[str, str] = {
     'note_price':             '30',
     'delivery_price':         '100',
+    'packaging_price':        '120',  # flat rate: charged if any wrapping OR tissue is present
     'prepayment_percent':     '50',
     'base_address':           'Измаил, ул. Миротворча(чилюскина) 36',
     'max_bouquets_per_route': '15',
@@ -152,16 +160,16 @@ def _seed_wrapping(db: sqlite3.Connection) -> int:
         Number of rows inserted (0 if already seeded).
     """
     inserted = 0
-    for name, price in WRAPPING:
+    for name, wrapping_type, price in WRAPPING:
         cur = db.execute(
             """
-            INSERT INTO wrapping_options (name, current_price)
-            SELECT ?, ?
+            INSERT INTO wrapping_options (name, wrapping_type, current_price)
+            SELECT ?, ?, ?
             WHERE NOT EXISTS (
                 SELECT 1 FROM wrapping_options WHERE name = ?
             )
             """,
-            (name, price, name),
+            (name, wrapping_type, price, name),
         )
         inserted += cur.rowcount
     return inserted

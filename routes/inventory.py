@@ -12,15 +12,12 @@ Endpoints:
 
 from flask import Blueprint, abort, render_template, request
 
+from config import DELIVERY_DATES, TIME_SLOTS
 from database.db import get_db
 
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
 
 _BOUQUET_SIZES = [11, 25, 51]
-_TIME_SLOTS = [
-    '08:00-10:00', '10:00-12:00', '12:00-14:00',
-    '14:00-16:00', '16:00-18:00', '18:00-20:00',
-]
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +156,22 @@ def available():
     else:
         mix_opts = []
 
+    # Reserved stems grouped by delivery date (active orders only)
+    _rbd_rows = db.execute(
+        """SELECT o.delivery_date,
+                  COALESCE(SUM(oi.quantity), 0) AS stems
+             FROM order_items oi
+             JOIN orders o ON o.id = oi.order_id
+            WHERE o.order_status NOT IN ('cancelled', 'done')
+            GROUP BY o.delivery_date"""
+    ).fetchall()
+    _rbd_map = {r['delivery_date']: r['stems'] for r in _rbd_rows}
+    reserved_by_date = [
+        {'label': d['label'], 'stems': _rbd_map[d['value']]}
+        for d in DELIVERY_DATES
+        if _rbd_map.get(d['value'], 0) > 0
+    ]
+
     # Time slot occupancy for delivery orders
     slot_rows = db.execute(
         "SELECT desired_time, COUNT(*) AS cnt FROM orders"
@@ -169,7 +182,7 @@ def available():
     slot_counts = {r['desired_time']: r['cnt'] for r in slot_rows}
 
     slots = []
-    for t in _TIME_SLOTS:
+    for t in TIME_SLOTS:
         count = slot_counts.get(t, 0)
         free  = max_per_route - count
         pct   = min(count * 100 // max_per_route, 100) if max_per_route > 0 else 100
@@ -183,6 +196,7 @@ def available():
         slots=slots,
         delivery_price=delivery_price,
         total_avail=total_avail,
+        reserved_by_date=reserved_by_date,
     )
 
 

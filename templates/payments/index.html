@@ -122,8 +122,11 @@
         </div>
         {# Recipient #}
         <div class="text-sm text-gray-700 truncate mt-0.5">{{ o['recipient_name'] }}</div>
-        {# Paid / Total #}
+        {# Date + Paid / Total #}
         <div class="text-xs text-gray-400">
+          {% if o['delivery_date'] %}
+            📅 {{ o['delivery_date'].split('-')[2] | int }} марта ·
+          {% endif %}
           {{ "%.0f"|format(o['paid_amount']) }} ₴ из {{ "%.0f"|format(o['total_price']) }} ₴
         </div>
       </div>

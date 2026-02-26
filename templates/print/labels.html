@@ -102,6 +102,13 @@
       padding-top: 2mm;
       border-top: 1px solid #e5e7eb;
     }
+    .label-date {
+      font-size: 13px;
+      font-weight: 900;
+      color: #be185d;
+      letter-spacing: .03em;
+      margin-top: 1mm;
+    }
     .time-slot {
       font-size: 11px;
       color: #555;
@@ -143,6 +150,7 @@
     <div class="label-top">
       <span class="route-badge">
         Маршрут {{ route['route_number'] }} · Стоп {{ s['route_order'] }}
+        {% if route['delivery_date'] %} · {{ route['delivery_date'].split('-')[2] | int }} марта{% endif %}
         {% if s['desired_time'] %} · {{ s['desired_time'] }}{% endif %}
       </span>
       <span class="order-num">#{{ s['order_number'] }}</span>
@@ -150,6 +158,9 @@
 
     {# Recipient #}
     <div class="recipient">{{ s['recipient_name'] }}</div>
+    {% if route['delivery_date'] %}
+    <div class="label-date">📅 {{ route['delivery_date'].split('-')[2] | int }} МАРТА</div>
+    {% endif %}
 
     {# Address #}
     {% if s['delivery_address'] %}

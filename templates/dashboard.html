@@ -49,6 +49,28 @@
     </div>
   </section>
 
+  {# ── Per-date breakdown ────────────────────────────────────────── #}
+  {% set has_any = stats.date_breakdown | selectattr('orders', 'gt', 0) | list %}
+  {% if has_any %}
+  <section>
+    <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2">По датам</h2>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {% for d in stats.date_breakdown %}
+      {% if d.orders > 0 %}
+      <div class="flex items-center justify-between px-4 py-2.5
+                  border-b border-gray-50 last:border-0">
+        <span class="text-sm font-semibold text-gray-700">{{ d.label }} марта</span>
+        <div class="flex items-center gap-4 text-sm">
+          <span class="text-gray-400">{{ d.orders }} зак.</span>
+          <span class="font-semibold text-gray-800 w-16 text-right">{{ d.stems }} шт.</span>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   {# ── Revenue metrics (3 columns) ──────────────────────────────── #}
   <section>
     <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2">Финансы</h2>

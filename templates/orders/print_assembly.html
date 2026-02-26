@@ -63,11 +63,34 @@
     </tbody>
   </table>
 
+  {% set tissue_labels = {
+       'florist': 'Тишью любая',
+       'none':    'Без тишью',
+       'white':   'Белая',
+       'cream':   'Молочная',
+       'black':   'Чёрная',
+       'pink':    'Розовая',
+  } %}
   <div class="meta">
-    🎁 <strong>Упаковка:</strong> {{ order['wrapping_name'] or 'Без упаковки' }}
+    🎁 <strong>Упаковка:</strong>
+    {% if order['wrapping_name'] == 'Выбор флориста' or not order['wrapping_name'] %}
+      Упаковка любая
+    {% else %}
+      {{ order['wrapping_name'] }}
+    {% endif %}
   </div>
   <div class="meta">
-    🎀 <strong>Лента:</strong> {{ order['ribbon_name'] }}
+    🎀 <strong>Лента:</strong>
+    {% if order['ribbon_name'] == 'Выбор флориста' %}
+      Лента любая
+    {% else %}
+      {{ order['ribbon_name'] }}
+    {% endif %}
+  </div>
+  <div class="meta">
+    🌸 <strong>Тишью:</strong>
+    {% set t = order['tissue'] if order['tissue'] else 'florist' %}
+    {{ tissue_labels.get(t, t) }}
   </div>
 
   {% if order['has_note'] and order['note_text'] %}

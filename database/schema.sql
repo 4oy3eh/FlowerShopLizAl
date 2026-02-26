@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS tulip_varieties (
 
 CREATE TABLE IF NOT EXISTS wrapping_options (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,                         -- "Крафт бумага", "Белая матовая"
+    name TEXT NOT NULL,                         -- "молочная", "белый"
+    wrapping_type TEXT NOT NULL DEFAULT 'other',-- "florist", "замшевая", "каффин", "пленка"
     current_price REAL NOT NULL,
     is_active INTEGER NOT NULL DEFAULT 1
 );
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS delivery_routes (
     actual_end TEXT,
     total_orders INTEGER NOT NULL DEFAULT 0,
     google_maps_url TEXT,
+    delivery_date TEXT,                                -- "2025-03-04" … "2025-03-09"
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -78,9 +80,10 @@ CREATE TABLE IF NOT EXISTS orders (
     has_note INTEGER NOT NULL DEFAULT 0,
     note_text TEXT,
 
-    -- Wrapping and ribbon
+    -- Wrapping, ribbon and tissue
     wrapping_id INTEGER REFERENCES wrapping_options(id),  -- NULL = no wrapping
     ribbon_color_id INTEGER NOT NULL REFERENCES ribbon_colors(id),
+    tissue TEXT NOT NULL DEFAULT 'florist',     -- "florist", "none", "white", "cream", "black", "pink"
 
     -- Prices (FIXED at order creation time!)
     flowers_total REAL NOT NULL DEFAULT 0,
@@ -100,6 +103,7 @@ CREATE TABLE IF NOT EXISTS orders (
         CHECK(order_status IN ('new','confirmed','assembling','ready','delivering','delivered','done','cancelled')),
 
     -- Delivery
+    delivery_date TEXT NOT NULL DEFAULT '2025-03-08',  -- "2025-03-04" … "2025-03-09"
     route_id INTEGER REFERENCES delivery_routes(id),
     route_order INTEGER,
 
@@ -152,6 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_payment_log_order ON payment_log(order_id);
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+-- idx_orders_delivery_date is created in run_migrations() after the column is guaranteed to exist
 
 -- ============================================================
 -- Initial system settings

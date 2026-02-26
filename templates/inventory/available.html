@@ -125,7 +125,25 @@
     </div>
   </section>
 
-  {# ── Section 3: Delivery time slots ───────────────────────────── #}
+  {# ── Section 3: Reserved stems by delivery date ───────────────── #}
+  {% if reserved_by_date %}
+  <section>
+    <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2">
+      Зарезервировано по датам
+    </h2>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {% for d in reserved_by_date %}
+      <div class="flex items-center justify-between px-4 py-3
+                  border-b border-gray-50 last:border-0">
+        <span class="text-sm font-medium text-gray-700">{{ d.label }} марта</span>
+        <span class="text-base font-bold text-gray-900">{{ d.stems }} шт.</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ── Section 4: Delivery time slots ───────────────────────────── #}
   <section>
     <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2">
       Слоты доставки

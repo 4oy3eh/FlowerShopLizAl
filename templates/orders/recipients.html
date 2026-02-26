@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Получатели — FlowerShop{% endblock %}
+
+{% block content %}
+
+{# ── Header ── #}
+<div class="flex items-center gap-3 mb-4">
+  <a href="/orders" class="text-gray-400 text-sm active:text-gray-600">← Заказы</a>
+</div>
+<h1 class="text-xl font-bold text-gray-900 mb-0.5">Получатели</h1>
+<p class="text-sm text-gray-400 mb-5">
+  {% if orders %}
+    {{ orders | length }} заказ(ов) без данных получателя
+  {% else %}
+    Все получатели заполнены
+  {% endif %}
+</p>
+
+{# ── Order cards with inline recipient forms ── #}
+{% for o in orders %}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+
+  {# Order summary row #}
+  <div class="flex items-center gap-2 mb-1">
+    <a href="/orders/{{ o['id'] }}"
+       class="font-bold text-gray-900 hover:text-pink-600 transition">
+      #{{ o['order_number'] }}
+    </a>
+    <span class="px-2 py-0.5 rounded-full text-xs font-medium
+                 {{ STATUS_COLORS[o['order_status']] }}">
+      {{ STATUS_LABELS[o['order_status']] }}
+    </span>
+    <span class="ml-auto text-sm font-semibold text-gray-800">
+      {{ "%.0f"|format(o['total_price']) }} ₴
+    </span>
+  </div>
+
+  <p class="text-xs text-gray-500 mb-1">
+    Заказчик: <span class="font-medium">{{ o['customer_name'] or 'Аноним' }}</span>
+    &nbsp;{{ o['customer_phone'] }}
+  </p>
+  <p class="text-xs text-gray-400 mb-4">
+    {% if o['is_pickup'] %}🏪 Самовывоз{% else %}🚚 Доставка{% endif %}
+    &nbsp;·&nbsp;📅 {{ o['delivery_date'].split('-')[2] | int }} марта
+    {% if o['desired_time'] %}&nbsp;⏰ {{ o['desired_time'] }}{% endif %}
+  </p>
+
+  {# Recipient fill-in form #}
+  <form method="post" action="/orders/{{ o['id'] }}/recipient">
+    <input type="hidden" name="next" value="/orders/recipients">
+
+    <div class="mb-2">
+      <label class="block text-xs text-gray-500 mb-1">Имя получателя</label>
+      <input type="text" name="recipient_name"
+             value="{{ o['recipient_name'] }}"
+             placeholder="Мария"
+             class="w-full rounded-xl border border-gray-200 text-base px-3 py-2.5
+                    bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
+    </div>
+
+    <div class="mb-2">
+      <label class="block text-xs text-gray-500 mb-1">Телефон получателя</label>
+      <input type="tel" name="recipient_phone"
+             value="{{ o['recipient_phone'] }}"
+             placeholder="+380" inputmode="tel"
+             oninput="formatPhone(this)"
+             class="w-full rounded-xl border border-gray-200 text-base px-3 py-2.5
+                    bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
+    </div>
+
+    {% if not o['is_pickup'] %}
+    <div class="mb-3">
+      <label class="block text-xs text-gray-500 mb-1">Адрес доставки</label>
+      <textarea name="delivery_address" rows="2"
+                placeholder="Улица, дом, кв."
+                class="w-full rounded-xl border border-gray-200 text-base px-3 py-2.5
+                       bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                       resize-none">{{ o['delivery_address'] or '' }}</textarea>
+    </div>
+    {% endif %}
+
+    <button type="submit"
+            class="w-full py-2.5 rounded-xl bg-pink-600 text-white font-semibold text-sm
+                   active:bg-pink-700 transition">
+      Сохранить получателя
+    </button>
+  </form>
+
+</div>
+{% endfor %}
+
+{# ── Empty state ── #}
+{% if not orders %}
+<div class="text-center py-14">
+  <div class="text-4xl mb-3">✓</div>
+  <p class="text-base font-semibold text-gray-700 mb-1">Все получатели заполнены</p>
+  <p class="text-sm text-gray-400 mb-6">Нет активных заказов без данных получателя</p>
+  <a href="/orders"
+     class="px-5 py-2.5 rounded-xl bg-pink-600 text-white text-sm font-semibold
+            active:bg-pink-700 transition">
+    К заказам
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function formatPhone(el) {
+  let d = el.value.replace(/\D/g, '');
+  if (!d) { el.value = ''; return; }
+  if (d.startsWith('380'))      d = d.slice(3);
+  else if (d.startsWith('38'))  d = d.slice(2);
+  else if (d.startsWith('0'))   d = d.slice(1);
+  el.value = '+380' + d.slice(0, 9);
+}
+</script>
+{% endblock %}

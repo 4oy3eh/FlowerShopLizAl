@@ -16,6 +16,8 @@ import sqlite3
 
 from flask import g, current_app
 
+from config import DEFAULT_DELIVERY_DATE
+
 
 def get_db() -> sqlite3.Connection:
     """Return the SQLite connection for the current request context.
@@ -65,3 +67,100 @@ def init_db() -> None:
     )
     with open(schema_path, encoding='utf-8') as f:
         db.executescript(f.read())
+
+
+def run_migrations() -> None:
+    """Apply incremental schema migrations, safe to re-run on every startup.
+
+    Each migration is guarded by a ``PRAGMA table_info`` check so it is
+    idempotent — running it against a database that already has the columns
+    is a no-op.  Must be called inside an active Flask application context.
+
+    Migrations applied here:
+    - Add ``delivery_date`` (TEXT) to ``orders`` and ``delivery_routes``
+    - Add ``tissue`` (TEXT, default 'florist') to ``orders``
+    - Add ``wrapping_type`` (TEXT, default 'other') to ``wrapping_options``
+    - Deactivate old wrapping options; insert new ones with correct types
+    - Insert 'Выбор флориста' ribbon colour if absent
+    """
+    db = get_db()
+
+    # --- orders.delivery_date ---
+    orders_cols = {row[1] for row in db.execute('PRAGMA table_info(orders)')}
+    if 'delivery_date' not in orders_cols:
+        db.execute(
+            f"ALTER TABLE orders "
+            f"ADD COLUMN delivery_date TEXT NOT NULL DEFAULT '{DEFAULT_DELIVERY_DATE}'"
+        )
+
+    # --- delivery_routes.delivery_date ---
+    routes_cols = {row[1] for row in db.execute('PRAGMA table_info(delivery_routes)')}
+    if 'delivery_date' not in routes_cols:
+        db.execute(
+            'ALTER TABLE delivery_routes ADD COLUMN delivery_date TEXT'
+        )
+
+    # Index is idempotent via IF NOT EXISTS
+    db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_orders_delivery_date ON orders(delivery_date)'
+    )
+
+    # --- orders.tissue ---
+    orders_cols = {row[1] for row in db.execute('PRAGMA table_info(orders)')}
+    if 'tissue' not in orders_cols:
+        db.execute("ALTER TABLE orders ADD COLUMN tissue TEXT NOT NULL DEFAULT 'florist'")
+
+    # --- wrapping_options.wrapping_type ---
+    wrap_cols = {row[1] for row in db.execute('PRAGMA table_info(wrapping_options)')}
+    if 'wrapping_type' not in wrap_cols:
+        db.execute("ALTER TABLE wrapping_options ADD COLUMN wrapping_type TEXT DEFAULT 'other'")
+
+    # --- Refresh wrapping catalogue (deactivate old, insert new) ---
+    # Detect whether the new catalogue is already loaded by checking for
+    # the sentinel 'florist' type entry.
+    has_florist = db.execute(
+        "SELECT 1 FROM wrapping_options WHERE wrapping_type = 'florist' LIMIT 1"
+    ).fetchone()
+    if not has_florist:
+        # Mark every existing wrapping row as inactive
+        db.execute("UPDATE wrapping_options SET is_active = 0")
+        # Insert new catalogue entries (idempotent via WHERE NOT EXISTS)
+        new_wrapping = [
+            ('Выбор флориста',            'florist',   0.0),
+            ('Замшевая молочная',         'замшевая',  40.0),
+            ('Замшевая розовая',          'замшевая',  40.0),
+            ('Замшевая чёрная',           'замшевая',  40.0),
+            ('Замшевая красная',          'замшевая',  40.0),
+            ('Каффин белый',              'каффин',    40.0),
+            ('Каффин чёрный',             'каффин',    40.0),
+            ('Каффин серый',              'каффин',    40.0),
+            ('Каффин розовый',            'каффин',    40.0),
+            ('Пленка прозрачная матовая', 'пленка',    30.0),
+            ('Пленка белая',              'пленка',    30.0),
+            ('Пленка чёрная',             'пленка',    30.0),
+        ]
+        for name, wtype, price in new_wrapping:
+            db.execute(
+                """INSERT INTO wrapping_options (name, wrapping_type, current_price)
+                   SELECT ?, ?, ?
+                   WHERE NOT EXISTS (SELECT 1 FROM wrapping_options WHERE name = ?)""",
+                (name, wtype, price, name),
+            )
+
+    # --- packaging_price system setting ---
+    db.execute(
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('packaging_price', '120')"
+    )
+
+    # --- 'Выбор флориста' ribbon colour ---
+    has_florist_ribbon = db.execute(
+        "SELECT 1 FROM ribbon_colors WHERE name = 'Выбор флориста' LIMIT 1"
+    ).fetchone()
+    if not has_florist_ribbon:
+        # Insert with the lowest id so it appears first; use a temp row then fix id
+        # Simpler: just insert normally — the form will put it first via ORDER
+        db.execute(
+            "INSERT INTO ribbon_colors (name) VALUES ('Выбор флориста')"
+        )
+
+    db.commit()

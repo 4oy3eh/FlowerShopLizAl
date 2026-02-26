@@ -24,8 +24,12 @@
 
   {# ── Recipient ── #}
   <div class="text-sm text-gray-800 mb-1">
-    <span class="font-medium">→ {{ o['recipient_name'] }}</span>
-    <span class="text-gray-400 ml-1 text-xs">{{ o['recipient_phone'] }}</span>
+    {% if o['recipient_name'] %}
+      <span class="font-medium">→ {{ o['recipient_name'] }}</span>
+      <span class="text-gray-400 ml-1 text-xs">{{ o['recipient_phone'] }}</span>
+    {% else %}
+      <span class="text-amber-600 text-xs font-medium">⚠ Получатель не указан</span>
+    {% endif %}
   </div>
 
   {# ── Bottom row: delivery type + time + total ── #}
@@ -34,6 +38,10 @@
       <span>🏪 Самовывоз</span>
     {% else %}
       <span>🚚 Доставка</span>
+    {% endif %}
+
+    {% if o['delivery_date'] %}
+      <span>📅 {{ o['delivery_date'].split('-')[2] | int }} марта</span>
     {% endif %}
 
     {% if o['desired_time'] %}

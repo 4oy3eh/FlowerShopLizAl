@@ -24,13 +24,11 @@ from flask import Blueprint, flash, redirect, render_template, request
 
 from urllib.parse import quote as url_quote
 
+from config import DELIVERY_DATES, DEFAULT_DELIVERY_DATE, TIME_SLOTS
 from database.db import get_db
 from services.route_service import generate_google_maps_url, generate_route
 
 delivery_bp = Blueprint('delivery', __name__, url_prefix='/routes')
-
-# Time slots must match the values stored in orders.desired_time
-TIME_SLOTS = ['08-10', '10-12', '12-14', '14-16', '16-18', '18-20']
 
 ROUTE_STATUS_LABELS = {
     'planning':    'Планирование',
@@ -119,8 +117,9 @@ def _inject_helpers():
 def route_list():
     """Render the route list page with the "generate new route" form.
 
-    Also shows how many unassigned ready-delivery orders exist per time
-    slot so the dispatcher knows which slots are ready to route.
+    Shows unassigned ready-delivery orders per (date, slot) pair so the
+    dispatcher knows which combinations have orders ready to route.
+    Routes are grouped by delivery_date for display.
 
     Returns:
         Rendered ``delivery/index.html`` template.
@@ -133,27 +132,44 @@ def route_list():
                     WHERE o.route_id = r.id
                       AND o.order_status = 'delivered') AS delivered_count
              FROM delivery_routes r
-            ORDER BY r.created_at DESC"""
+            ORDER BY r.delivery_date DESC, r.route_number"""
     ).fetchall()
 
-    # How many unassigned ready-delivery orders exist per time slot
-    slot_counts = {}
-    for slot in TIME_SLOTS:
-        cnt = db.execute(
-            """SELECT COUNT(*) FROM orders
-                WHERE order_status = 'ready'
-                  AND is_pickup   = 0
-                  AND route_id    IS NULL
-                  AND desired_time = ?""",
-            (slot,),
-        ).fetchone()[0]
-        slot_counts[slot] = cnt
+    # Group routes by delivery_date (dict preserves insertion order in Py 3.7+)
+    routes_by_date: dict = {}
+    for r in routes:
+        key = r['delivery_date'] or r['created_at'][:10]
+        routes_by_date.setdefault(key, []).append(r)
+
+    # Unassigned ready-for-delivery orders per (date, slot) — single query
+    slot_rows = db.execute(
+        """SELECT delivery_date, desired_time, COUNT(*) AS cnt
+             FROM orders
+            WHERE order_status = 'ready'
+              AND is_pickup    = 0
+              AND route_id     IS NULL
+              AND desired_time IS NOT NULL
+            GROUP BY delivery_date, desired_time"""
+    ).fetchall()
+
+    # Build slot_counts_by_date: {date_value: {slot: count}}
+    slot_counts_by_date = {
+        d['value']: {s: 0 for s in TIME_SLOTS}
+        for d in DELIVERY_DATES
+    }
+    for row in slot_rows:
+        d_val = row['delivery_date']
+        slot  = row['desired_time']
+        if d_val in slot_counts_by_date and slot in slot_counts_by_date[d_val]:
+            slot_counts_by_date[d_val][slot] = row['cnt']
 
     return render_template(
         'delivery/index.html',
-        routes=routes,
+        routes_by_date=routes_by_date,
         time_slots=TIME_SLOTS,
-        slot_counts=slot_counts,
+        slot_counts_by_date=slot_counts_by_date,
+        delivery_dates=DELIVERY_DATES,
+        default_delivery_date=DEFAULT_DELIVERY_DATE,
     )
 
 
@@ -172,9 +188,14 @@ def generate_route_view():
     Returns:
         Redirect to ``/routes/<id>`` on success, or to ``/routes`` on error.
     """
-    time_slot = request.form.get('time_slot', '').strip()
+    time_slot     = request.form.get('time_slot', '').strip()
+    delivery_date = request.form.get('delivery_date', DEFAULT_DELIVERY_DATE).strip()
+
     if not time_slot:
         flash('Выберите временной слот', 'error')
+        return redirect('/routes')
+    if not delivery_date:
+        flash('Выберите дату доставки', 'error')
         return redirect('/routes')
 
     db = get_db()
@@ -186,7 +207,7 @@ def generate_route_view():
     max_orders = int(row['value']) if row else 15
 
     try:
-        route_id = generate_route(db, time_slot, max_orders)
+        route_id = generate_route(db, time_slot, delivery_date, max_orders)
         flash('Маршрут сформирован!', 'success')
         return redirect(f'/routes/{route_id}')
     except ValueError as exc:
@@ -419,7 +440,7 @@ def print_assembly_sheet(route_id):
     orders = db.execute(
         """SELECT o.id, o.order_number, o.route_order,
                   o.recipient_name, o.desired_time,
-                  o.has_note, o.note_text,
+                  o.has_note, o.note_text, o.tissue,
                   w.name AS wrapping_name,
                   r.name AS ribbon_name
              FROM orders o
@@ -554,12 +575,21 @@ def courier_view(route_id):
     stops           = _get_stops(db, route_id)
     delivered_count = sum(1 for s in stops if s['order_status'] == 'delivered')
 
+    # Other routes on the same delivery date — used for in-day navigation
+    sibling_routes = db.execute(
+        """SELECT id, route_number FROM delivery_routes
+            WHERE delivery_date = ?
+            ORDER BY route_number""",
+        (route['delivery_date'],),
+    ).fetchall() if route['delivery_date'] else []
+
     return render_template(
         'courier/route.html',
         route=route,
         stops=stops,
         route_id=route_id,
         delivered_count=delivered_count,
+        sibling_routes=sibling_routes,
     )
 
 
