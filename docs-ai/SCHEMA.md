@@ -130,6 +130,7 @@ CREATE TABLE orders (
         CHECK(order_status IN ('new','confirmed','assembling','ready','delivering','delivered','done','cancelled')),
 
     -- Доставка
+    delivery_date TEXT NOT NULL DEFAULT '2025-03-08', -- "2025-03-04" … "2025-03-09"
     route_id INTEGER REFERENCES delivery_routes(id),
     route_order INTEGER,
 
@@ -185,6 +186,7 @@ CREATE TABLE delivery_routes (
     actual_end TEXT,
     total_orders INTEGER NOT NULL DEFAULT 0,
     google_maps_url TEXT,
+    delivery_date TEXT,                                -- "2025-03-04" … "2025-03-09"
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
@@ -217,6 +219,7 @@ CREATE INDEX idx_orders_customer ON orders(customer_id);
 CREATE INDEX idx_order_items_order ON order_items(order_id);
 CREATE INDEX idx_payment_log_order ON payment_log(order_id);
 CREATE INDEX idx_customers_phone ON customers(phone);
+CREATE INDEX idx_orders_delivery_date ON orders(delivery_date);
 ```
 
 ---

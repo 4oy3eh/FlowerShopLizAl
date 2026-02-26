@@ -152,6 +152,35 @@ def run_migrations() -> None:
         "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('packaging_price', '120')"
     )
 
+    # --- order_bouquets table ---
+    existing_tables = {r[0] for r in db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )}
+    if 'order_bouquets' not in existing_tables:
+        db.executescript("""
+            CREATE TABLE order_bouquets (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id         INTEGER NOT NULL REFERENCES orders(id),
+                position         INTEGER NOT NULL DEFAULT 1,
+                wrapping_id      INTEGER REFERENCES wrapping_options(id),
+                ribbon_color_id  INTEGER NOT NULL REFERENCES ribbon_colors(id),
+                tissue           TEXT NOT NULL DEFAULT 'florist',
+                has_note         INTEGER NOT NULL DEFAULT 0,
+                note_text        TEXT,
+                wrapping_price   REAL NOT NULL DEFAULT 0,
+                note_price       REAL NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_order_bouquets_order
+                ON order_bouquets(order_id);
+        """)
+
+    # --- order_items.bouquet_id ---
+    items_cols = {r[1] for r in db.execute('PRAGMA table_info(order_items)')}
+    if 'bouquet_id' not in items_cols:
+        db.execute(
+            'ALTER TABLE order_items ADD COLUMN bouquet_id INTEGER REFERENCES order_bouquets(id)'
+        )
+
     # --- 'Выбор флориста' ribbon colour ---
     has_florist_ribbon = db.execute(
         "SELECT 1 FROM ribbon_colors WHERE name = 'Выбор флориста' LIMIT 1"

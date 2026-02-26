@@ -146,7 +146,7 @@
                class="w-full rounded-xl border border-gray-200 text-base px-3 py-2.5
                       bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
       </div>
-      <div class="mb-2">
+      <div class="mb-3">
         <label class="block text-xs text-gray-500 mb-1">Телефон получателя</label>
         <input type="tel" name="recipient_phone"
                value="{{ order['recipient_phone'] }}"
@@ -155,8 +155,30 @@
                class="w-full rounded-xl border border-gray-200 text-base px-3 py-2.5
                       bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
       </div>
-      {% if not order['is_pickup'] %}
+
+      {# Delivery type toggle #}
       <div class="mb-3">
+        <label class="block text-xs text-gray-500 mb-1.5">Тип доставки</label>
+        <div class="flex rounded-xl border border-gray-200 overflow-hidden text-sm font-medium">
+          <label class="flex-1 flex items-center justify-center gap-1.5 py-2.5 cursor-pointer
+                         has-[:checked]:bg-pink-50 has-[:checked]:text-pink-700 transition">
+            <input type="radio" name="is_pickup" value="1" class="sr-only"
+                   onchange="toggleAddressField(this.value)"
+                   {{ 'checked' if order['is_pickup'] else '' }}>
+            🏪 Самовывоз
+          </label>
+          <label class="flex-1 flex items-center justify-center gap-1.5 py-2.5 cursor-pointer
+                         border-l border-gray-200
+                         has-[:checked]:bg-pink-50 has-[:checked]:text-pink-700 transition">
+            <input type="radio" name="is_pickup" value="0" class="sr-only"
+                   onchange="toggleAddressField(this.value)"
+                   {{ 'checked' if not order['is_pickup'] else '' }}>
+            🚚 Доставка
+          </label>
+        </div>
+      </div>
+
+      <div id="address-field" class="mb-3 {{ 'hidden' if order['is_pickup'] else '' }}">
         <label class="block text-xs text-gray-500 mb-1">Адрес доставки</label>
         <textarea name="delivery_address" rows="2"
                   placeholder="Улица, дом, кв."
@@ -164,7 +186,7 @@
                          bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
                          resize-none">{{ order['delivery_address'] or '' }}</textarea>
       </div>
-      {% endif %}
+
       <div class="flex gap-2">
         <button type="button" onclick="toggleRecipientEdit()"
                 class="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600
@@ -188,76 +210,145 @@
   <p class="text-sm text-gray-600">{{ order['customer_phone'] }}</p>
 </div>
 
-{# ── Bouquet ── #}
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
-  <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Букет</h2>
+{# ── Bouquet(s) ── #}
+{% set tissue_labels = {
+     'florist': 'Выбор флориста',
+     'none':    'Без тишью',
+     'white':   'Белая',
+     'cream':   'Молочная',
+     'black':   'Чёрная',
+     'pink':    'Розовая',
+} %}
 
-  {# Flowers #}
-  <table class="w-full text-sm mb-3">
-    <thead>
-      <tr class="text-left text-xs text-gray-400 border-b border-gray-100">
-        <th class="pb-1 font-medium">Сорт</th>
-        <th class="pb-1 font-medium text-right">Кол-во</th>
-        <th class="pb-1 font-medium text-right">Цена</th>
-        <th class="pb-1 font-medium text-right">Сумма</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in items %}
-      <tr class="border-b border-gray-50">
-        <td class="py-1.5 text-gray-800">{{ item['variety_name'] }}</td>
-        <td class="py-1.5 text-right text-gray-600">{{ item['quantity'] }} шт.</td>
-        <td class="py-1.5 text-right text-gray-500">{{ "%.0f"|format(item['unit_price']) }}</td>
-        <td class="py-1.5 text-right font-medium text-gray-900">{{ "%.0f"|format(item['line_total']) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+{% if bouquets %}
+  {# New-style multi-bouquet order #}
+  {% for b in bouquets %}
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+    <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+      Букет {{ loop.index }}
+      {% if bouquets|length > 1 %}
+        <span class="normal-case font-normal text-gray-300">из {{ bouquets|length }}</span>
+      {% endif %}
+    </h2>
 
-  {# Wrapping, ribbon, tissue #}
-  {% set tissue_labels = {
-       'florist': 'Выбор флориста',
-       'none':    'Без тишью',
-       'white':   'Белая',
-       'cream':   'Молочная',
-       'black':   'Чёрная',
-       'pink':    'Розовая',
-  } %}
-  <div class="space-y-1 text-sm text-gray-600 mb-2">
-    <div>
-      🎁 <strong class="text-gray-700">Упаковка:</strong>
-      {% if order['wrapping_name'] == 'Выбор флориста' or not order['wrapping_name'] %}
-        <span class="text-gray-400 italic">Упаковка любая</span>
-      {% else %}
-        {{ order['wrapping_name'] }}
-      {% endif %}
+    <table class="w-full text-sm mb-3">
+      <thead>
+        <tr class="text-left text-xs text-gray-400 border-b border-gray-100">
+          <th class="pb-1 font-medium">Сорт</th>
+          <th class="pb-1 font-medium text-right">Кол-во</th>
+          <th class="pb-1 font-medium text-right">Цена</th>
+          <th class="pb-1 font-medium text-right">Сумма</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in b['items'] %}
+        <tr class="border-b border-gray-50">
+          <td class="py-1.5 text-gray-800">{{ item['variety_name'] }}</td>
+          <td class="py-1.5 text-right text-gray-600">{{ item['quantity'] }} шт.</td>
+          <td class="py-1.5 text-right text-gray-500">{{ "%.0f"|format(item['unit_price']) }}</td>
+          <td class="py-1.5 text-right font-medium text-gray-900">{{ "%.0f"|format(item['line_total']) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="space-y-1 text-sm text-gray-600 mb-2">
+      <div>
+        🎁 <strong class="text-gray-700">Упаковка:</strong>
+        {% if b['wrapping_name'] == 'Выбор флориста' or not b['wrapping_name'] %}
+          <span class="text-gray-400 italic">Упаковка любая</span>
+        {% else %}
+          {{ b['wrapping_name'] }}
+        {% endif %}
+      </div>
+      <div>
+        🎀 <strong class="text-gray-700">Лента:</strong>
+        {% if b['ribbon_name'] == 'Выбор флориста' %}
+          <span class="text-gray-400 italic">Лента любая</span>
+        {% else %}
+          {{ b['ribbon_name'] }}
+        {% endif %}
+      </div>
+      <div>
+        🌸 <strong class="text-gray-700">Тишью:</strong>
+        {% set t = b['tissue'] if b['tissue'] else 'florist' %}
+        {% if t == 'florist' %}
+          <span class="text-gray-400 italic">Тишью любая</span>
+        {% else %}
+          {{ tissue_labels.get(t, t) }}
+        {% endif %}
+      </div>
     </div>
-    <div>
-      🎀 <strong class="text-gray-700">Лента:</strong>
-      {% if order['ribbon_name'] == 'Выбор флориста' %}
-        <span class="text-gray-400 italic">Лента любая</span>
-      {% else %}
-        {{ order['ribbon_name'] }}
-      {% endif %}
+
+    {% if b['has_note'] %}
+    <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-sm text-gray-700">
+      <span class="font-medium">📝 Записка:</span> {{ b['note_text'] }}
     </div>
-    <div>
-      🌸 <strong class="text-gray-700">Тишью:</strong>
-      {% set t = order['tissue'] if order['tissue'] else 'florist' %}
-      {% if t == 'florist' %}
-        <span class="text-gray-400 italic">Тишью любая</span>
-      {% else %}
-        {{ tissue_labels.get(t, t) }}
-      {% endif %}
-    </div>
+    {% endif %}
   </div>
+  {% endfor %}
 
-  {# Note #}
-  {% if order['has_note'] %}
-  <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-sm text-gray-700">
-    <span class="font-medium">📝 Записка:</span> {{ order['note_text'] }}
+{% else %}
+  {# Legacy single-bouquet order (no order_bouquets rows) #}
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+    <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Букет</h2>
+
+    <table class="w-full text-sm mb-3">
+      <thead>
+        <tr class="text-left text-xs text-gray-400 border-b border-gray-100">
+          <th class="pb-1 font-medium">Сорт</th>
+          <th class="pb-1 font-medium text-right">Кол-во</th>
+          <th class="pb-1 font-medium text-right">Цена</th>
+          <th class="pb-1 font-medium text-right">Сумма</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr class="border-b border-gray-50">
+          <td class="py-1.5 text-gray-800">{{ item['variety_name'] }}</td>
+          <td class="py-1.5 text-right text-gray-600">{{ item['quantity'] }} шт.</td>
+          <td class="py-1.5 text-right text-gray-500">{{ "%.0f"|format(item['unit_price']) }}</td>
+          <td class="py-1.5 text-right font-medium text-gray-900">{{ "%.0f"|format(item['line_total']) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="space-y-1 text-sm text-gray-600 mb-2">
+      <div>
+        🎁 <strong class="text-gray-700">Упаковка:</strong>
+        {% if order['wrapping_name'] == 'Выбор флориста' or not order['wrapping_name'] %}
+          <span class="text-gray-400 italic">Упаковка любая</span>
+        {% else %}
+          {{ order['wrapping_name'] }}
+        {% endif %}
+      </div>
+      <div>
+        🎀 <strong class="text-gray-700">Лента:</strong>
+        {% if order['ribbon_name'] == 'Выбор флориста' %}
+          <span class="text-gray-400 italic">Лента любая</span>
+        {% else %}
+          {{ order['ribbon_name'] }}
+        {% endif %}
+      </div>
+      <div>
+        🌸 <strong class="text-gray-700">Тишью:</strong>
+        {% set t = order['tissue'] if order['tissue'] else 'florist' %}
+        {% if t == 'florist' %}
+          <span class="text-gray-400 italic">Тишью любая</span>
+        {% else %}
+          {{ tissue_labels.get(t, t) }}
+        {% endif %}
+      </div>
+    </div>
+
+    {% if order['has_note'] %}
+    <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-sm text-gray-700">
+      <span class="font-medium">📝 Записка:</span> {{ order['note_text'] }}
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
-</div>
+{% endif %}
 
 {# ── Price breakdown ── #}
 <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
@@ -305,6 +396,10 @@
 function toggleRecipientEdit() {
   document.getElementById('recipient-view').classList.toggle('hidden');
   document.getElementById('recipient-edit').classList.toggle('hidden');
+}
+
+function toggleAddressField(value) {
+  document.getElementById('address-field').classList.toggle('hidden', value === '1');
 }
 
 function formatPhoneDet(el) {

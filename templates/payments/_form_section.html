@@ -56,7 +56,7 @@
         <label class="block text-xs font-medium text-gray-500 mb-1">Сумма платежа</label>
         <input type="number"
                name="amount"
-               min="0.01"
+               min="1"
                step="1"
                value="{{ "%.0f"|format(balance) if balance > 0 else '' }}"
                inputmode="decimal"

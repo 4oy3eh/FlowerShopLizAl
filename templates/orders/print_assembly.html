@@ -44,25 +44,6 @@
   <h2>#{{ order['order_number'] }}</h2>
   <div class="sub">→ {{ order['recipient_name'] }}</div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Сорт</th>
-        <th style="text-align:right">Кол-во</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in items %}
-      <tr>
-        <td>{{ item['variety_name'] }}
-            <span style="color:#9ca3af; font-size:12px"> ({{ item['variety_color'] }})</span>
-        </td>
-        <td class="qty">{{ item['quantity'] }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
   {% set tissue_labels = {
        'florist': 'Тишью любая',
        'none':    'Без тишью',
@@ -71,33 +52,118 @@
        'black':   'Чёрная',
        'pink':    'Розовая',
   } %}
-  <div class="meta">
-    🎁 <strong>Упаковка:</strong>
-    {% if order['wrapping_name'] == 'Выбор флориста' or not order['wrapping_name'] %}
-      Упаковка любая
-    {% else %}
-      {{ order['wrapping_name'] }}
-    {% endif %}
-  </div>
-  <div class="meta">
-    🎀 <strong>Лента:</strong>
-    {% if order['ribbon_name'] == 'Выбор флориста' %}
-      Лента любая
-    {% else %}
-      {{ order['ribbon_name'] }}
-    {% endif %}
-  </div>
-  <div class="meta">
-    🌸 <strong>Тишью:</strong>
-    {% set t = order['tissue'] if order['tissue'] else 'florist' %}
-    {{ tissue_labels.get(t, t) }}
-  </div>
 
-  {% if order['has_note'] and order['note_text'] %}
-  <div class="note-box">
-    <div class="note-label">📝 Записка</div>
-    {{ order['note_text'] }}
-  </div>
+  {% if bouquets %}
+    {# New-style multi-bouquet order #}
+    {% for b in bouquets %}
+    {% if not loop.first %}
+    <div style="border-top:2px solid #e5e7eb; margin-top:16px; padding-top:12px;"></div>
+    {% endif %}
+
+    {% if bouquets|length > 1 %}
+    <div style="font-size:13px; color:#6b7280; font-weight:600; margin-bottom:8px;">
+      Букет {{ loop.index }} из {{ bouquets|length }}
+    </div>
+    {% endif %}
+
+    <table>
+      <thead>
+        <tr>
+          <th>Сорт</th>
+          <th style="text-align:right">Кол-во</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in b['items'] %}
+        <tr>
+          <td>{{ item['variety_name'] }}
+              <span style="color:#9ca3af; font-size:12px"> ({{ item['variety_color'] }})</span>
+          </td>
+          <td class="qty">{{ item['quantity'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="meta">
+      🎁 <strong>Упаковка:</strong>
+      {% if b['wrapping_name'] == 'Выбор флориста' or not b['wrapping_name'] %}
+        Упаковка любая
+      {% else %}
+        {{ b['wrapping_name'] }}
+      {% endif %}
+    </div>
+    <div class="meta">
+      🎀 <strong>Лента:</strong>
+      {% if b['ribbon_name'] == 'Выбор флориста' %}
+        Лента любая
+      {% else %}
+        {{ b['ribbon_name'] }}
+      {% endif %}
+    </div>
+    <div class="meta">
+      🌸 <strong>Тишью:</strong>
+      {% set t = b['tissue'] if b['tissue'] else 'florist' %}
+      {{ tissue_labels.get(t, t) }}
+    </div>
+
+    {% if b['has_note'] and b['note_text'] %}
+    <div class="note-box">
+      <div class="note-label">📝 Записка</div>
+      {{ b['note_text'] }}
+    </div>
+    {% endif %}
+    {% endfor %}
+
+  {% else %}
+    {# Legacy single-bouquet #}
+    <table>
+      <thead>
+        <tr>
+          <th>Сорт</th>
+          <th style="text-align:right">Кол-во</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item['variety_name'] }}
+              <span style="color:#9ca3af; font-size:12px"> ({{ item['variety_color'] }})</span>
+          </td>
+          <td class="qty">{{ item['quantity'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="meta">
+      🎁 <strong>Упаковка:</strong>
+      {% if order['wrapping_name'] == 'Выбор флориста' or not order['wrapping_name'] %}
+        Упаковка любая
+      {% else %}
+        {{ order['wrapping_name'] }}
+      {% endif %}
+    </div>
+    <div class="meta">
+      🎀 <strong>Лента:</strong>
+      {% if order['ribbon_name'] == 'Выбор флориста' %}
+        Лента любая
+      {% else %}
+        {{ order['ribbon_name'] }}
+      {% endif %}
+    </div>
+    <div class="meta">
+      🌸 <strong>Тишью:</strong>
+      {% set t = order['tissue'] if order['tissue'] else 'florist' %}
+      {{ tissue_labels.get(t, t) }}
+    </div>
+
+    {% if order['has_note'] and order['note_text'] %}
+    <div class="note-box">
+      <div class="note-label">📝 Записка</div>
+      {{ order['note_text'] }}
+    </div>
+    {% endif %}
   {% endif %}
 
   <script>window.onload = () => window.print();</script>

@@ -237,6 +237,24 @@ def create_order_route():
         Redirect to ``/orders/<id>`` on success, or to ``/orders/new`` on
         error.
     """
+    # Parse multi-bouquet form data
+    try:
+        bouquet_count = max(1, int(request.form.get('bouquet_count', '1') or '1'))
+    except (ValueError, TypeError):
+        bouquet_count = 1
+
+    bouquets = []
+    for i in range(bouquet_count):
+        bouquets.append({
+            'variety_ids':     request.form.getlist(f'variety_id_{i}[]'),
+            'quantities':      request.form.getlist(f'quantity_{i}[]'),
+            'wrapping_id':     request.form.get(f'b_wrapping_{i}', '').strip() or None,
+            'ribbon_color_id': request.form.get(f'b_ribbon_{i}', '').strip(),
+            'tissue':          request.form.get(f'b_tissue_{i}', 'florist').strip(),
+            'has_note':        bool(request.form.get(f'b_has_note_{i}')),
+            'note_text':       (request.form.get(f'b_note_{i}') or '').strip(),
+        })
+
     data = {
         'customer_phone':   request.form.get('customer_phone', '').strip(),
         'customer_name':    request.form.get('customer_name', '').strip(),
@@ -246,13 +264,7 @@ def create_order_route():
         'delivery_address': request.form.get('delivery_address', '').strip(),
         'delivery_date':    request.form.get('delivery_date', DEFAULT_DELIVERY_DATE).strip(),
         'desired_time':     request.form.get('desired_time', '').strip(),
-        'has_note':         request.form.get('has_note', ''),
-        'note_text':        request.form.get('note_text', '').strip(),
-        'wrapping_id':      request.form.get('wrapping_id', '').strip(),
-        'ribbon_color_id':  request.form.get('ribbon_color_id', '').strip(),
-        'tissue':           request.form.get('tissue', 'florist').strip(),
-        'variety_ids':      request.form.getlist('variety_id[]'),
-        'quantities':       request.form.getlist('quantity[]'),
+        'bouquets':         bouquets,
     }
 
     try:
@@ -408,11 +420,36 @@ def order_detail(order_id):
         flash('Заказ не найден', 'error')
         return redirect('/orders')
 
+    # Load bouquets (new-style multi-bouquet orders)
+    raw_bouquets = db.execute(
+        '''SELECT ob.*, wo.name AS wrapping_name, rc.name AS ribbon_name
+             FROM order_bouquets ob
+             LEFT JOIN wrapping_options wo ON ob.wrapping_id    = wo.id
+             LEFT JOIN ribbon_colors    rc ON ob.ribbon_color_id = rc.id
+            WHERE ob.order_id = ?
+            ORDER BY ob.position''',
+        (order_id,)
+    ).fetchall()
+
+    bouquets = []
+    for b in raw_bouquets:
+        bd = dict(b)
+        bd['items'] = db.execute(
+            '''SELECT oi.*, tv.name AS variety_name, tv.color AS variety_color
+                 FROM order_items oi
+                 JOIN tulip_varieties tv ON oi.variety_id = tv.id
+                WHERE oi.bouquet_id = ?
+                ORDER BY oi.id''',
+            (b['id'],)
+        ).fetchall()
+        bouquets.append(bd)
+
+    # Fallback items for old orders (no order_bouquets rows)
     items = db.execute(
         '''SELECT oi.*, tv.name AS variety_name, tv.color AS variety_color
              FROM order_items oi
              JOIN tulip_varieties tv ON oi.variety_id = tv.id
-            WHERE oi.order_id = ?
+            WHERE oi.order_id = ? AND (oi.bouquet_id IS NULL)
             ORDER BY oi.id''',
         (order_id,)
     ).fetchall()
@@ -426,6 +463,7 @@ def order_detail(order_id):
         'orders/detail.html',
         order=order,
         items=items,
+        bouquets=bouquets,
         payments=payments,
     )
 
@@ -494,6 +532,7 @@ def update_order_recipient(order_id):
         'recipient_name':   request.form.get('recipient_name', '').strip(),
         'recipient_phone':  request.form.get('recipient_phone', '').strip(),
         'delivery_address': request.form.get('delivery_address', '').strip(),
+        'is_pickup':        request.form.get('is_pickup', '0'),
     }
     next_url = request.form.get('next') or f'/orders/{order_id}'
     try:
@@ -587,13 +626,39 @@ def print_assembly(order_id):
     if order is None:
         return 'Заказ не найден', 404
 
+    # Load bouquets (new-style multi-bouquet orders)
+    raw_bouquets = db.execute(
+        '''SELECT ob.*, wo.name AS wrapping_name, rc.name AS ribbon_name
+             FROM order_bouquets ob
+             LEFT JOIN wrapping_options wo ON ob.wrapping_id     = wo.id
+             LEFT JOIN ribbon_colors    rc ON ob.ribbon_color_id = rc.id
+            WHERE ob.order_id = ?
+            ORDER BY ob.position''',
+        (order_id,)
+    ).fetchall()
+
+    bouquets = []
+    for b in raw_bouquets:
+        bd = dict(b)
+        bd['items'] = db.execute(
+            '''SELECT oi.quantity, tv.name AS variety_name, tv.color AS variety_color
+                 FROM order_items oi
+                 JOIN tulip_varieties tv ON oi.variety_id = tv.id
+                WHERE oi.bouquet_id = ?
+                ORDER BY tv.name''',
+            (b['id'],)
+        ).fetchall()
+        bouquets.append(bd)
+
+    # Fallback for old orders
     items = db.execute(
         '''SELECT oi.quantity, tv.name AS variety_name, tv.color AS variety_color
              FROM order_items oi
              JOIN tulip_varieties tv ON oi.variety_id = tv.id
-            WHERE oi.order_id = ?
+            WHERE oi.order_id = ? AND (oi.bouquet_id IS NULL)
             ORDER BY tv.name''',
         (order_id,)
     ).fetchall()
 
-    return render_template('orders/print_assembly.html', order=order, items=items)
+    return render_template('orders/print_assembly.html', order=order, items=items,
+                           bouquets=bouquets)

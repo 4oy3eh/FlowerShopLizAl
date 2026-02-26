@@ -123,6 +123,19 @@ CREATE TABLE IF NOT EXISTS order_items (
     line_total REAL NOT NULL                    -- quantity * unit_price
 );
 
+CREATE TABLE IF NOT EXISTS order_bouquets (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id         INTEGER NOT NULL REFERENCES orders(id),
+    position         INTEGER NOT NULL DEFAULT 1,  -- 1, 2, 3… display order
+    wrapping_id      INTEGER REFERENCES wrapping_options(id),
+    ribbon_color_id  INTEGER NOT NULL REFERENCES ribbon_colors(id),
+    tissue           TEXT NOT NULL DEFAULT 'florist',
+    has_note         INTEGER NOT NULL DEFAULT 0,
+    note_text        TEXT,
+    wrapping_price   REAL NOT NULL DEFAULT 0,     -- FIXED at order creation time
+    note_price       REAL NOT NULL DEFAULT 0      -- FIXED at order creation time
+);
+
 CREATE TABLE IF NOT EXISTS payment_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id INTEGER NOT NULL REFERENCES orders(id),
@@ -154,6 +167,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_payment ON orders(payment_status);
 CREATE INDEX IF NOT EXISTS idx_orders_route ON orders(route_id);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_bouquets_order ON order_bouquets(order_id);
 CREATE INDEX IF NOT EXISTS idx_payment_log_order ON payment_log(order_id);
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
 -- idx_orders_delivery_date is created in run_migrations() after the column is guaranteed to exist
