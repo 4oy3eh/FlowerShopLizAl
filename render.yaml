@@ -2,9 +2,10 @@ services:
   - type: web
     name: flower-shop
     env: python
-    plan: free
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 1
+    healthCheckPath: /
     disk:
       name: flower-shop-data
       mountPath: /data
