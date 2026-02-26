@@ -122,6 +122,31 @@ def _start_scheduler(db_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# First-run seeder
+# ---------------------------------------------------------------------------
+
+def _seed_if_empty() -> None:
+    """Seed reference data if the database is empty (first run only).
+
+    Checks whether tulip_varieties is empty.  If so, runs the full seed
+    so that varieties, wrapping options, ribbons, and system settings are
+    populated.  Safe to call on every startup — does nothing when data
+    already exists.
+    """
+    from database.db import get_db
+    from database.seed import seed
+
+    db = get_db()
+    count = db.execute('SELECT COUNT(*) FROM tulip_varieties').fetchone()[0]
+    if count == 0:
+        counts = seed(db)
+        db.commit()
+        print('[seed] Reference data inserted:', counts)
+    else:
+        print(f'[seed] Skipped — {count} varieties already in DB.')
+
+
+# ---------------------------------------------------------------------------
 # Application factory
 # ---------------------------------------------------------------------------
 
@@ -148,6 +173,8 @@ def create_app() -> Flask:
     with app.app_context():
         init_db()
         run_migrations()
+        # Seed reference data on first run (idempotent — skips if already present)
+        _seed_if_empty()
 
     # ---------------------------------------------------------------------------
     # Blueprints
