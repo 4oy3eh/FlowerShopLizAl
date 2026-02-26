@@ -14,6 +14,7 @@ from services.price_service import snapshot_all_bouquets, snapshot_prices
 from services.stock_service import check_availability, reserve, release
 
 _PHONE_RE = re.compile(r'^\+380\d{9}$')
+_INSTAGRAM_RE = re.compile(r'^@[\w.]{1,30}$')
 
 # ---------------------------------------------------------------------------
 # Order status machine
@@ -36,23 +37,20 @@ CANCEL_ALLOWED = {'new', 'confirmed', 'assembling', 'ready'}
 # ---------------------------------------------------------------------------
 
 def _validate_phone(phone: str, label: str) -> str:
-    """Normalise and validate a Ukrainian mobile phone number.
+    """Validate a phone number or Instagram handle.
 
-    Args:
-        phone: Raw phone string from the form (may have leading/trailing
-            whitespace).
-        label: Human-readable field label used in the error message (e.g.
-            ``'телефона получателя'``).
-
-    Returns:
-        The stripped phone string if it matches ``+380XXXXXXXXX``.
+    Accepts either a Ukrainian mobile number (+380XXXXXXXXX) or an
+    Instagram handle starting with @ (e.g. @username).
 
     Raises:
-        ValueError: If the phone does not match the expected format.
+        ValueError: If the value does not match either accepted format.
     """
     phone = phone.strip()
-    if not _PHONE_RE.match(phone):
-        raise ValueError(f'Неверный формат {label}: нужен +380XXXXXXXXX')
+    if phone.startswith('@'):
+        if not _INSTAGRAM_RE.match(phone):
+            raise ValueError(f'Неверный формат Instagram для {label}: нужен @username')
+    elif not _PHONE_RE.match(phone):
+        raise ValueError(f'Неверный формат {label}: нужен +380XXXXXXXXX или @instagram')
     return phone
 
 
@@ -490,6 +488,202 @@ def cancel_order(db, order_id: int) -> None:
             )
         release(db, order_id)
         db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
+def update_order(db, order_id: int, data: dict) -> None:
+    """Full update of an order: bouquets, items, delivery info, dates.
+
+    Allowed only for orders in CANCEL_ALLOWED statuses.  Releases old stock
+    reservations, re-validates, re-prices at current rates, replaces all
+    bouquet/item rows, and re-reserves new stock — all in one transaction.
+
+    Args:
+        db: Active SQLite connection.
+        order_id: Primary key of the order to update.
+        data: Same structure as :func:`create_order` data dict.
+
+    Raises:
+        ValueError: On validation failure, stock shortage, or wrong status.
+    """
+    _TISSUE_VALUES = {'florist', 'none', 'white', 'cream', 'black', 'pink'}
+
+    row = db.execute(
+        'SELECT order_status, customer_id FROM orders WHERE id = ?', (order_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError('Заказ не найден')
+    if row['order_status'] not in CANCEL_ALLOWED:
+        raise ValueError('Нельзя редактировать заказ в текущем статусе')
+
+    # ── Parse order-level fields ─────────────────────────────────────────
+    is_pickup = data.get('is_pickup') in ('1', True, 1)
+
+    recipient_name = (data.get('recipient_name') or '').strip()
+
+    raw_recip_phone = (data.get('recipient_phone') or '').strip()
+    if raw_recip_phone:
+        recipient_phone = _validate_phone(raw_recip_phone, 'телефона получателя')
+    else:
+        recipient_phone = ''
+
+    delivery_address = (data.get('delivery_address') or '').strip() or None
+    delivery_date = (data.get('delivery_date') or DEFAULT_DELIVERY_DATE).strip()
+    desired_time = (data.get('desired_time') or '').strip() or None
+
+    # ── Customer — update if new phone supplied ──────────────────────────
+    raw_cust_phone = (data.get('customer_phone') or '').strip()
+    if raw_cust_phone:
+        customer_phone = _validate_phone(raw_cust_phone, 'телефона заказчика')
+        customer_name  = (data.get('customer_name') or '').strip() or 'Аноним'
+        customer_id    = find_or_create_customer(db, customer_phone, customer_name)
+    else:
+        customer_id = row['customer_id']
+
+    # ── Parse bouquets ───────────────────────────────────────────────────
+    raw_bouquets = data.get('bouquets') or []
+    if not raw_bouquets:
+        raise ValueError('Добавьте хотя бы один букет')
+
+    parsed_bouquets = []
+    for idx, b in enumerate(raw_bouquets):
+        label = f'Букет {idx + 1}'
+
+        raw_ribbon = (b.get('ribbon_color_id') or '').strip()
+        if not raw_ribbon:
+            raise ValueError(f'{label}: выберите цвет ленты')
+        ribbon_color_id = int(raw_ribbon)
+
+        raw_wrapping = b.get('wrapping_id') or None
+        wrapping_id  = int(raw_wrapping) if raw_wrapping else None
+
+        tissue = (b.get('tissue') or 'florist').strip()
+        if tissue not in _TISSUE_VALUES:
+            tissue = 'florist'
+
+        has_note  = bool(b.get('has_note'))
+        note_text = (b.get('note_text') or '').strip() or None
+        if has_note and not note_text:
+            raise ValueError(f'{label}: введите текст записки или снимите галочку')
+
+        variety_id_qty = _parse_items(
+            b.get('variety_ids', []),
+            b.get('quantities', []),
+        )
+
+        parsed_bouquets.append({
+            'ribbon_color_id':      ribbon_color_id,
+            'wrapping_id':          wrapping_id,
+            'tissue':               tissue,
+            'has_note':             has_note,
+            'note_text':            note_text,
+            'variety_id_qty_pairs': variety_id_qty,
+        })
+
+    # Aggregate quantities by variety across all bouquets
+    qty_by_variety: dict[int, int] = {}
+    for b in parsed_bouquets:
+        for vid, qty in b['variety_id_qty_pairs']:
+            qty_by_variety[vid] = qty_by_variety.get(vid, 0) + qty
+
+    try:
+        # 1. Release old stock BEFORE deleting items (release reads order_items)
+        release(db, order_id)
+
+        # 2. Drop old bouquet/item rows
+        db.execute('DELETE FROM order_items   WHERE order_id = ?', (order_id,))
+        db.execute('DELETE FROM order_bouquets WHERE order_id = ?', (order_id,))
+
+        # 3. Stock check (old stock is now free again)
+        for vid, total_qty in qty_by_variety.items():
+            if not check_availability(db, vid, total_qty):
+                vrow = db.execute(
+                    'SELECT name, stock_available FROM tulip_varieties WHERE id = ?', (vid,)
+                ).fetchone()
+                name  = vrow['name']           if vrow else f'сорт #{vid}'
+                avail = vrow['stock_available'] if vrow else 0
+                raise ValueError(
+                    f'Недостаточно «{name}»: запрошено {total_qty}, доступно {avail} шт.'
+                )
+
+        # 4. Price snapshot at current rates
+        bouquets_for_pricing = [
+            {
+                'variety_id_qty_pairs': b['variety_id_qty_pairs'],
+                'wrapping_id':          b['wrapping_id'],
+                'tissue':               b['tissue'],
+                'has_note':             b['has_note'],
+            }
+            for b in parsed_bouquets
+        ]
+        prices = snapshot_all_bouquets(db, bouquets_for_pricing, is_pickup)
+        first  = parsed_bouquets[0]
+
+        # 5. Update orders row
+        db.execute(
+            """UPDATE orders
+                  SET customer_id = ?,
+                      recipient_name = ?, recipient_phone = ?,
+                      delivery_address = ?, is_pickup = ?,
+                      delivery_date = ?, desired_time = ?,
+                      has_note = ?, note_text = ?,
+                      wrapping_id = ?, ribbon_color_id = ?, tissue = ?,
+                      flowers_total = ?, wrapping_price = ?, note_price = ?,
+                      delivery_price = ?, total_price = ?,
+                      updated_at = datetime('now')
+                WHERE id = ?""",
+            (
+                customer_id,
+                recipient_name, recipient_phone,
+                delivery_address, 1 if is_pickup else 0,
+                delivery_date, desired_time,
+                1 if first['has_note'] else 0, first['note_text'],
+                first['wrapping_id'], first['ribbon_color_id'], first['tissue'],
+                prices['flowers_total'], prices['wrapping_price'],
+                prices['note_price'], prices['delivery_price'], prices['total_price'],
+                order_id,
+            )
+        )
+
+        # 6. Insert new bouquets + items
+        for position, (b_parsed, b_prices) in enumerate(
+                zip(parsed_bouquets, prices['bouquets']), start=1):
+
+            db.execute(
+                '''INSERT INTO order_bouquets
+                       (order_id, position, wrapping_id, ribbon_color_id, tissue,
+                        has_note, note_text, wrapping_price, note_price)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                (
+                    order_id, position,
+                    b_parsed['wrapping_id'],
+                    b_parsed['ribbon_color_id'],
+                    b_parsed['tissue'],
+                    1 if b_parsed['has_note'] else 0,
+                    b_parsed['note_text'],
+                    b_prices['wrapping_price'],
+                    b_prices['note_price'],
+                )
+            )
+            bouquet_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+            for item in b_prices['items']:
+                db.execute(
+                    '''INSERT INTO order_items
+                           (order_id, bouquet_id, variety_id, quantity, unit_price, line_total)
+                       VALUES (?, ?, ?, ?, ?, ?)''',
+                    (order_id, bouquet_id, item['variety_id'], item['quantity'],
+                     item['unit_price'], item['line_total'])
+                )
+
+        # 7. Reserve new stock
+        for vid, total_qty in qty_by_variety.items():
+            reserve(db, vid, total_qty)
+
+        db.commit()
+
     except Exception:
         db.rollback()
         raise

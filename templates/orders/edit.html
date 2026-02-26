@@ -1,0 +1,853 @@
+{% extends "base.html" %}
+{% block title %}Редактирование #{{ order['order_number'] }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto">
+
+  {# ── Header ── #}
+  <div class="flex items-center gap-3 mb-5">
+    <a href="/orders/{{ order['id'] }}"
+       class="text-gray-400 text-xl font-light leading-none px-1">←</a>
+    <h1 class="text-xl font-bold text-gray-800">
+      Редактировать #{{ order['order_number'] }}
+    </h1>
+  </div>
+
+  {# Flash errors are shown via base.html, but also keep an inline banner #}
+
+  <form id="order-form" method="POST" action="/orders/{{ order['id'] }}/update"
+        autocomplete="off">
+
+    {# ── Заказчик ── #}
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+      <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Заказчик</h2>
+      <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1.5">Телефон или Instagram</label>
+        <input type="text" name="customer_phone"
+               value="{{ order['customer_phone'] }}"
+               placeholder="+380 или @instagram"
+               class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3
+                      bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1.5">Имя заказчика</label>
+        <input type="text" name="customer_name"
+               value="{{ order['customer_name'] }}"
+               placeholder="Аноним"
+               class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3
+                      bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
+      </div>
+    </div>
+
+    {# ── Получатель ── #}
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+      <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Получатель</h2>
+      <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1.5">Имя получателя</label>
+        <input type="text" name="recipient_name"
+               value="{{ order['recipient_name'] }}"
+               placeholder="Мария"
+               class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3
+                      bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
+      </div>
+      <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1.5">Телефон или Instagram получателя</label>
+        <input type="text" name="recipient_phone"
+               value="{{ order['recipient_phone'] }}"
+               placeholder="+380 или @instagram"
+               class="w-full rounded-xl border border-gray-300 text-lg px-4 py-3
+                      bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
+      </div>
+
+      {# Delivery type toggle #}
+      <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1.5">Способ получения</label>
+        <div class="flex rounded-xl overflow-hidden border border-gray-300">
+          <button type="button" id="btn-delivery" onclick="setPickup(false)"
+                  class="flex-1 py-3 text-base font-medium transition
+                         {{ 'bg-pink-600 text-white' if not order['is_pickup'] else 'bg-white text-gray-600' }}">
+            Доставка
+          </button>
+          <button type="button" id="btn-pickup" onclick="setPickup(true)"
+                  class="flex-1 py-3 text-base font-medium transition
+                         {{ 'bg-pink-600 text-white' if order['is_pickup'] else 'bg-white text-gray-600' }}">
+            Самовывоз
+          </button>
+        </div>
+        <input type="hidden" name="is_pickup" id="is_pickup_input"
+               value="{{ '1' if order['is_pickup'] else '0' }}">
+      </div>
+
+      <div id="delivery-fields" class="{{ 'hidden' if order['is_pickup'] else '' }}">
+        <label class="block text-sm text-gray-600 mb-1.5">Адрес доставки</label>
+        <textarea name="delivery_address" rows="2"
+                  placeholder="Улица, дом, кв."
+                  class="w-full rounded-xl border border-gray-300 text-base px-4 py-3
+                         bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                         resize-none">{{ order['delivery_address'] or '' }}</textarea>
+      </div>
+    </div>
+
+    {# ── Дата и время ── #}
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+      <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Дата и время</h2>
+
+      <div class="mb-4">
+        <label class="block text-sm text-gray-600 mb-1.5">
+          Дата — <span class="text-gray-400">Марта</span>
+        </label>
+        <div class="flex gap-1.5">
+          {% for d in delivery_dates %}
+          <button type="button" data-date="{{ d.value }}" onclick="selectDate(this)"
+                  class="date-btn flex-1 py-3 rounded-xl text-base font-bold transition
+                         {{ 'bg-pink-600 text-white' if d.value == order['delivery_date'] else 'bg-white text-gray-600 border border-gray-300' }}">
+            {{ d.label }}
+          </button>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="delivery_date" id="delivery_date_input"
+               value="{{ order['delivery_date'] }}">
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-600 mb-1.5">Желаемое время</label>
+        <div class="relative">
+          <select name="desired_time"
+                  class="w-full rounded-xl border border-gray-300 text-base px-4 py-3
+                         bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                         appearance-none pr-10">
+            <option value="">Не указано</option>
+            {% for slot in time_slots %}
+            <option value="{{ slot }}" {{ 'selected' if slot == order['desired_time'] else '' }}>
+              {{ slot }}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+            <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Букеты ── #}
+    <div id="bouquets-container">
+      {% for b in bouquets %}
+      {% set bi = loop.index0 %}
+      <div class="bouquet-section rounded-2xl border-2 border-pink-100 bg-white p-4 mb-4"
+           data-bouquet-index="{{ bi }}">
+
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="bouquet-title text-sm font-bold text-pink-700 uppercase tracking-wide">
+            Букет {{ loop.index }}
+          </h3>
+          <div class="flex gap-1.5">
+            <button type="button" onclick="duplicateBouquet(this)"
+                    class="text-xs px-2.5 py-1 rounded-lg border border-blue-200
+                           text-blue-500 bg-white active:bg-blue-50 transition">
+              Копировать
+            </button>
+            <button type="button" onclick="removeBouquet(this)"
+                    class="remove-bouquet {{ 'hidden' if bouquets|length == 1 else '' }}
+                           text-xs px-2.5 py-1 rounded-lg border border-red-200
+                           text-red-400 bg-white active:bg-red-50 transition">
+              Удалить
+            </button>
+          </div>
+        </div>
+
+        {# Variety rows — pre-filled #}
+        <div class="variety-rows-container mb-2">
+          {% for item in b['items'] %}
+          <div class="variety-row rounded-xl border border-gray-200 bg-gray-50 p-3 mb-2">
+            <div class="flex gap-2 mb-2">
+              <div class="relative flex-1 min-w-0">
+                <select name="variety_id_{{ bi }}[]"
+                        class="w-full rounded-lg border border-gray-200 text-base px-3 py-2.5
+                               bg-white focus:outline-none focus:ring-2
+                               focus:ring-pink-400 appearance-none pr-8"
+                        onchange="onVarietyChange(this)">
+                  <option value="">Выберите сорт</option>
+                  {% for v in varieties %}
+                  <option value="{{ v.id }}"
+                          data-price="{{ v.current_sell_price }}"
+                          data-stock="{{ v.stock_available }}"
+                          {{ 'selected' if v.id == item['variety_id'] else '' }}>
+                    {{ v.name }} — {{ v.current_sell_price | int }} ₴
+                    &nbsp;({{ v.stock_available }} шт.)
+                  </option>
+                  {% endfor %}
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                  <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24"
+                       stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </div>
+              </div>
+              <button type="button" onclick="removeRow(this)"
+                      class="remove-row {{ 'invisible' if b['items']|length == 1 else '' }}
+                             shrink-0 w-9 h-9 flex items-center justify-center
+                             rounded-lg text-gray-300 hover:text-red-400
+                             hover:bg-red-50 transition text-lg">✕</button>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-sm text-gray-500 shrink-0">Количество:</span>
+              <input type="number" name="quantity_{{ bi }}[]"
+                     value="{{ item['quantity'] }}" min="1"
+                     class="w-20 rounded-lg border border-gray-200 text-base px-3 py-2
+                            bg-white text-center focus:outline-none
+                            focus:ring-2 focus:ring-pink-400"
+                     oninput="onQtyChange(this)">
+              <span class="text-gray-400 shrink-0">=</span>
+              <span class="row-price font-semibold text-gray-800 shrink-0">— ₴</span>
+            </div>
+            <div class="row-stock-warn hidden mt-1.5 text-xs text-red-600 font-medium"></div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <button type="button"
+                onclick="addVarietyRow(this.closest('.bouquet-section'))"
+                class="w-full py-2.5 rounded-xl border-2 border-dashed border-pink-200
+                       text-pink-500 font-medium text-sm mb-4
+                       active:bg-pink-50 transition">
+          + Добавить сорт
+        </button>
+
+        {# Wrapping #}
+        <div class="mb-3">
+          <label class="block text-sm font-semibold text-gray-700 mb-1.5">Упаковка</label>
+          <div class="relative">
+            <select name="b_wrapping_{{ bi }}"
+                    class="bouquet-wrapping w-full rounded-xl border border-gray-300
+                           text-base px-4 py-3 bg-white focus:outline-none
+                           focus:ring-2 focus:ring-pink-400 appearance-none pr-10"
+                    onchange="onWrappingChange(this)">
+              <option value="" data-price="0" data-type=""
+                      {{ 'selected' if not b['wrapping_id'] else '' }}>
+                Без упаковки
+              </option>
+              {% set ns = namespace(prev_type='') %}
+              {% for w in wrapping %}
+                {% if w.wrapping_type != ns.prev_type %}
+                  {% if ns.prev_type and ns.prev_type not in ('florist', 'слюда') %}</optgroup>{% endif %}
+                  {% if w.wrapping_type not in ('florist', 'слюда') %}
+                    <optgroup label="{{ w.wrapping_type | capitalize }}">
+                  {% endif %}
+                  {% set ns.prev_type = w.wrapping_type %}
+                {% endif %}
+                <option value="{{ w.id }}"
+                        data-price="{{ w.current_price }}"
+                        data-type="{{ w.wrapping_type }}"
+                        {{ 'selected' if w.id == b['wrapping_id'] else '' }}>
+                  {%- if w.wrapping_type == 'florist' -%}
+                    Выбор флориста
+                  {%- else -%}
+                    {{ w.name.split(' ', 1)[1] if ' ' in w.name else w.name }}
+                  {%- endif -%}
+                </option>
+              {% endfor %}
+              {% if ns.prev_type and ns.prev_type not in ('florist', 'слюда') %}</optgroup>{% endif %}
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                   stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {# Ribbon #}
+        <div class="mb-3">
+          <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+            Лента <span class="text-red-500">*</span>
+          </label>
+          <div class="relative">
+            <select name="b_ribbon_{{ bi }}"
+                    class="bouquet-ribbon w-full rounded-xl border border-gray-300
+                           text-base px-4 py-3 bg-white focus:outline-none
+                           focus:ring-2 focus:ring-pink-400 appearance-none pr-10">
+              {% for r in ribbons %}
+              <option value="{{ r.id }}" {{ 'selected' if r.id == b['ribbon_color_id'] else '' }}>
+                {{ r.name }}
+              </option>
+              {% endfor %}
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                   stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {# Tissue #}
+        {% set ns2 = namespace(is_sluda=false) %}
+        {% for w in wrapping %}
+          {% if w.id == b['wrapping_id'] and w.wrapping_type == 'слюда' %}
+            {% set ns2.is_sluda = true %}
+          {% endif %}
+        {% endfor %}
+        <div class="bouquet-tissue-section mb-4 {{ 'hidden' if ns2.is_sluda else '' }}">
+          <label class="block text-sm font-semibold text-gray-700 mb-1.5">Тишью</label>
+          <div class="relative">
+            <select name="b_tissue_{{ bi }}"
+                    class="bouquet-tissue w-full rounded-xl border border-gray-300
+                           text-base px-4 py-3 bg-white focus:outline-none
+                           focus:ring-2 focus:ring-pink-400 appearance-none pr-10"
+                    onchange="recalcTotal()">
+              {% for val, label in tissue_options %}
+              <option value="{{ val }}"
+                      {{ 'selected' if val == (b['tissue'] or 'none') else '' }}>
+                {{ label }}
+              </option>
+              {% endfor %}
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                   stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {# Note #}
+        <div class="bouquet-note-section">
+          <label class="flex items-center gap-3 cursor-pointer select-none">
+            <input type="checkbox" name="b_has_note_{{ bi }}" value="1"
+                   class="bouquet-has-note w-5 h-5 rounded accent-pink-600 shrink-0"
+                   onchange="toggleNote(this)"
+                   {{ 'checked' if b['has_note'] else '' }}>
+            <span class="text-sm font-semibold text-gray-700">Добавить записку</span>
+            <span class="text-xs text-gray-400 ml-auto">+{{ settings.note_price | int }} ₴</span>
+          </label>
+          <div class="bouquet-note-fields {{ '' if b['has_note'] else 'hidden' }} mt-3">
+            <textarea name="b_note_{{ bi }}" rows="3"
+                      placeholder="Текст записки — будет написан от руки…"
+                      class="w-full rounded-xl border border-gray-300 text-base px-4 py-3
+                             bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
+                             resize-none">{{ b['note_text'] or '' }}</textarea>
+          </div>
+        </div>
+
+      </div>{# /bouquet-section #}
+      {% endfor %}
+    </div>{# /bouquets-container #}
+
+    <input type="hidden" id="bouquet-count" name="bouquet_count" value="{{ bouquets|length }}">
+
+    <button type="button" onclick="addBouquet()"
+            class="w-full py-3 rounded-xl border-2 border-dashed border-blue-200
+                   text-blue-500 font-semibold text-sm mb-6
+                   active:bg-blue-50 transition">
+      + Добавить ещё букет
+    </button>
+
+    {# ── Price summary ── #}
+    <div class="mb-6 rounded-xl bg-pink-50 border border-pink-100 p-4">
+      <h3 class="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+        Предварительная стоимость
+      </h3>
+      <div class="space-y-1.5 text-sm">
+        <div class="flex justify-between text-gray-600">
+          <span>Цветы</span>
+          <span><span id="sum-flowers">0</span> ₴</span>
+        </div>
+        <div class="flex justify-between text-gray-600">
+          <span>Упаковка + тишью</span>
+          <span><span id="sum-wrapping">0</span> ₴</span>
+        </div>
+        <div id="note-price-row" class="hidden flex justify-between text-gray-600">
+          <span>Записка</span>
+          <span><span id="sum-note">0</span> ₴</span>
+        </div>
+        <div class="flex justify-between text-gray-600">
+          <span>Доставка</span>
+          <span><span id="sum-delivery">0</span> ₴</span>
+        </div>
+        <div class="flex justify-between font-bold text-gray-800 text-base
+                    pt-2 border-t border-pink-200">
+          <span>ИТОГО</span>
+          <span><span id="sum-total">0</span> ₴</span>
+        </div>
+      </div>
+    </div>
+
+    {# ── Submit ── #}
+    <button type="submit"
+            class="w-full py-4 rounded-xl bg-green-600 text-white
+                   text-lg font-semibold active:bg-green-700 transition shadow-sm">
+      ✓ Сохранить изменения
+    </button>
+    <a href="/orders/{{ order['id'] }}"
+       class="block text-center text-sm text-gray-400 py-3 mt-1">
+      Отмена
+    </a>
+
+  </form>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+const VARIETIES = {{ varieties | tojson }};
+const SETTINGS  = {{ settings  | tojson }};
+
+const WRAPPING_HTML = (function() {
+  const rows = {{ wrapping | tojson }};
+  let prevType = '';
+  let html = '<option value="" data-price="0" data-type="" selected>Без упаковки</option>';
+  rows.forEach(w => {
+    if (w.wrapping_type !== prevType) {
+      if (prevType && prevType !== 'florist' && prevType !== 'слюда') html += '</optgroup>';
+      if (w.wrapping_type !== 'florist' && w.wrapping_type !== 'слюда') {
+        const cap = w.wrapping_type.charAt(0).toUpperCase() + w.wrapping_type.slice(1);
+        html += `<optgroup label="${cap}">`;
+      }
+      prevType = w.wrapping_type;
+    }
+    const label = w.wrapping_type === 'florist'
+      ? 'Выбор флориста'
+      : (w.name.includes(' ') ? w.name.split(' ').slice(1).join(' ') : w.name);
+    html += `<option value="${w.id}" data-price="${w.current_price}" data-type="${w.wrapping_type}">${label}</option>`;
+  });
+  if (prevType && prevType !== 'florist' && prevType !== 'слюда') html += '</optgroup>';
+  return html;
+})();
+
+const RIBBON_HTML = (function() {
+  const rows = {{ ribbons | tojson }};
+  return rows.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+})();
+
+const TISSUE_HTML = (function() {
+  const opts = [
+    ['florist','Выбор флориста'],['none','Без тишью'],
+    ['white','Белая'],['cream','Молочная'],['black','Чёрная'],['pink','Розовая']
+  ];
+  return opts.map(([v,l]) => `<option value="${v}"${v === 'none' ? ' selected' : ''}>${l}</option>`).join('');
+})();
+
+const chevronSVG =
+  `<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" ` +
+       `stroke="currentColor" stroke-width="2">` +
+    `<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>` +
+  `</svg>`;
+
+// ---------------------------------------------------------------------------
+// Delivery / Pickup toggle
+// ---------------------------------------------------------------------------
+function setPickup(isPickup) {
+  document.getElementById('is_pickup_input').value = isPickup ? '1' : '0';
+  document.getElementById('delivery-fields').classList.toggle('hidden', isPickup);
+  const btnDel  = document.getElementById('btn-delivery');
+  const btnPick = document.getElementById('btn-pickup');
+  btnDel.classList.toggle('bg-pink-600',  !isPickup);
+  btnDel.classList.toggle('text-white',   !isPickup);
+  btnDel.classList.toggle('bg-white',      isPickup);
+  btnDel.classList.toggle('text-gray-600', isPickup);
+  btnPick.classList.toggle('bg-pink-600',  isPickup);
+  btnPick.classList.toggle('text-white',   isPickup);
+  btnPick.classList.toggle('bg-white',    !isPickup);
+  btnPick.classList.toggle('text-gray-600',!isPickup);
+  recalcTotal();
+}
+
+// ---------------------------------------------------------------------------
+// Date picker
+// ---------------------------------------------------------------------------
+function selectDate(btn) {
+  document.querySelectorAll('.date-btn').forEach(b => {
+    const active = b === btn;
+    b.classList.toggle('bg-pink-600',     active);
+    b.classList.toggle('text-white',      active);
+    b.classList.toggle('bg-white',       !active);
+    b.classList.toggle('text-gray-600',  !active);
+    b.classList.toggle('border',         !active);
+    b.classList.toggle('border-gray-300',!active);
+  });
+  document.getElementById('delivery_date_input').value = btn.dataset.date;
+}
+
+// ---------------------------------------------------------------------------
+// Variety rows
+// ---------------------------------------------------------------------------
+function buildVarietyOptions() {
+  let html = '<option value="">Выберите сорт</option>';
+  VARIETIES.forEach(v => {
+    const price = Math.round(v.current_sell_price);
+    html += `<option value="${v.id}" data-price="${v.current_sell_price}" ` +
+            `data-stock="${v.stock_available}">` +
+            `${v.name} — ${price} ₴ \u00a0(${v.stock_available} шт.)` +
+            `</option>`;
+  });
+  return html;
+}
+
+function makeVarietyRow(idx) {
+  return `<div class="variety-row rounded-xl border border-gray-200 bg-gray-50 p-3 mb-2">` +
+    `<div class="flex gap-2 mb-2">` +
+      `<div class="relative flex-1 min-w-0">` +
+        `<select name="variety_id_${idx}[]"` +
+                ` class="w-full rounded-lg border border-gray-200 text-base px-3 py-2.5` +
+                         ` bg-white focus:outline-none focus:ring-2 focus:ring-pink-400 appearance-none pr-8"` +
+                ` onchange="onVarietyChange(this)">` +
+          buildVarietyOptions() +
+        `</select>` +
+        `<div class="pointer-events-none absolute inset-y-0 right-2 flex items-center">${chevronSVG}</div>` +
+      `</div>` +
+      `<button type="button" onclick="removeRow(this)"` +
+              ` class="remove-row shrink-0 w-9 h-9 flex items-center justify-center` +
+                      ` rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition text-lg">✕</button>` +
+    `</div>` +
+    `<div class="flex items-center gap-3">` +
+      `<span class="text-sm text-gray-500 shrink-0">Количество:</span>` +
+      `<input type="number" name="quantity_${idx}[]" value="1" min="1"` +
+             ` class="w-20 rounded-lg border border-gray-200 text-base px-3 py-2` +
+                     ` bg-white text-center focus:outline-none focus:ring-2 focus:ring-pink-400"` +
+             ` oninput="onQtyChange(this)">` +
+      `<span class="text-gray-400 shrink-0">=</span>` +
+      `<span class="row-price font-semibold text-gray-800 shrink-0">— ₴</span>` +
+    `</div>` +
+    `<div class="row-stock-warn hidden mt-1.5 text-xs text-red-600 font-medium"></div>` +
+  `</div>`;
+}
+
+function addVarietyRow(bouquetSection) {
+  const idx = parseInt(bouquetSection.dataset.bouquetIndex);
+  const container = bouquetSection.querySelector('.variety-rows-container');
+  const div = document.createElement('div');
+  div.innerHTML = makeVarietyRow(idx);
+  container.appendChild(div.firstElementChild);
+  updateRemoveButtons(bouquetSection);
+  recalcTotal();
+}
+
+function removeRow(btn) {
+  const bouquetSection = btn.closest('.bouquet-section');
+  if (bouquetSection.querySelectorAll('.variety-row').length <= 1) return;
+  btn.closest('.variety-row').remove();
+  updateRemoveButtons(bouquetSection);
+  checkAllRowsStock();
+  recalcTotal();
+}
+
+function updateRemoveButtons(bouquetSection) {
+  const rows = bouquetSection.querySelectorAll('.variety-row');
+  const show = rows.length > 1;
+  rows.forEach(row => {
+    const btn = row.querySelector('.remove-row');
+    if (btn) btn.classList.toggle('invisible', !show);
+  });
+}
+
+function onVarietyChange(select) {
+  updateRowPrice(select.closest('.variety-row'));
+  checkAllRowsStock();
+  recalcTotal();
+}
+
+function onQtyChange(input) {
+  if (input.value && parseInt(input.value) < 1) input.value = 1;
+  updateRowPrice(input.closest('.variety-row'));
+  checkAllRowsStock();
+  recalcTotal();
+}
+
+function updateRowPrice(row) {
+  const select = row.querySelector('select[name^="variety_id_"]');
+  const qtyEl  = row.querySelector('input[name^="quantity_"]');
+  const qty    = parseInt(qtyEl ? qtyEl.value : 0) || 0;
+  const opt    = select ? select.options[select.selectedIndex] : null;
+  const price  = opt ? parseFloat(opt.dataset.price || 0) : 0;
+  row.querySelector('.row-price').textContent =
+    (price && qty) ? (Math.round(price * qty) + ' ₴') : '— ₴';
+}
+
+function getVarietyQtyMap() {
+  const map = {};
+  document.querySelectorAll('.variety-row').forEach(row => {
+    const select = row.querySelector('select[name^="variety_id_"]');
+    const qtyEl  = row.querySelector('input[name^="quantity_"]');
+    if (!select || !qtyEl) return;
+    const vid = select.value;
+    const qty = parseInt(qtyEl.value) || 0;
+    if (vid && qty > 0) map[vid] = (map[vid] || 0) + qty;
+  });
+  return map;
+}
+
+function checkAllRowsStock() {
+  const totals = getVarietyQtyMap();
+  let ok = true;
+  document.querySelectorAll('.variety-row').forEach(row => {
+    const select = row.querySelector('select[name^="variety_id_"]');
+    const warn   = row.querySelector('.row-stock-warn');
+    if (!select || !warn) return;
+    const vid   = select.value;
+    if (!vid) return;
+    const opt   = select.options[select.selectedIndex];
+    const stock = parseInt(opt?.dataset.stock || 0);
+    const asked = totals[vid] || 0;
+    const over  = asked > stock;
+    warn.classList.toggle('hidden', !over);
+    if (over) {
+      warn.textContent = `⚠ Запрошено ${asked} шт., на складе ${stock} шт.`;
+      ok = false;
+    } else {
+      warn.textContent = '';
+    }
+  });
+  return ok;
+}
+
+// ---------------------------------------------------------------------------
+// Wrapping / tissue / note
+// ---------------------------------------------------------------------------
+function onWrappingChange(selectEl) {
+  const bouquetSection = selectEl.closest('.bouquet-section');
+  const opt  = selectEl.options[selectEl.selectedIndex];
+  const type = opt ? (opt.dataset.type || '') : '';
+  const tissueSection = bouquetSection.querySelector('.bouquet-tissue-section');
+  const tissueSelect  = bouquetSection.querySelector('.bouquet-tissue');
+  if (tissueSection) tissueSection.classList.toggle('hidden', type === 'слюда');
+  if (type === 'слюда' && tissueSelect) tissueSelect.value = 'none';
+  recalcTotal();
+}
+
+function toggleNote(cb) {
+  cb.closest('.bouquet-section')
+    .querySelector('.bouquet-note-fields')
+    .classList.toggle('hidden', !cb.checked);
+  recalcTotal();
+}
+
+// ---------------------------------------------------------------------------
+// Live price recalculation
+// ---------------------------------------------------------------------------
+function recalcTotal() {
+  const packagingPrice = parseFloat(SETTINGS.packaging_price || 120);
+  let flowersTotal  = 0;
+  let wrappingTotal = 0;
+  let noteTotal     = 0;
+
+  document.querySelectorAll('.bouquet-section').forEach(section => {
+    section.querySelectorAll('.variety-row').forEach(row => {
+      const select = row.querySelector('select[name^="variety_id_"]');
+      const qtyEl  = row.querySelector('input[name^="quantity_"]');
+      if (!select || !qtyEl) return;
+      const opt   = select.options[select.selectedIndex];
+      const price = opt ? parseFloat(opt.dataset.price || 0) : 0;
+      const qty   = parseInt(qtyEl.value) || 0;
+      if (price && qty) flowersTotal += price * qty;
+      updateRowPrice(row);
+    });
+
+    const wrapSel  = section.querySelector('.bouquet-wrapping');
+    const wrapOpt  = wrapSel ? wrapSel.options[wrapSel.selectedIndex] : null;
+    const wrapType = wrapOpt ? (wrapOpt.dataset.type || '') : '';
+    const isSluda  = wrapType === 'слюда';
+
+    const tissueSec = section.querySelector('.bouquet-tissue-section');
+    const tissueSel = section.querySelector('.bouquet-tissue');
+    if (tissueSec) tissueSec.classList.toggle('hidden', isSluda);
+    if (isSluda && tissueSel) tissueSel.value = 'none';
+
+    const hasWrapping = Boolean(wrapSel && wrapSel.value);
+    const tissueVal   = tissueSel ? tissueSel.value : 'none';
+    const hasTissue   = !isSluda && tissueVal && tissueVal !== 'none';
+
+    if (isSluda) {
+      wrappingTotal += parseFloat(wrapOpt ? wrapOpt.dataset.price || 0 : 0);
+    } else if (hasWrapping || hasTissue) {
+      wrappingTotal += packagingPrice;
+    }
+
+    const noteCb = section.querySelector('.bouquet-has-note');
+    if (noteCb && noteCb.checked) {
+      noteTotal += parseFloat(SETTINGS.note_price || 0);
+    }
+  });
+
+  const isPickup      = document.getElementById('is_pickup_input').value === '1';
+  const deliveryPrice = isPickup ? 0 : parseFloat(SETTINGS.delivery_price || 0);
+  const total         = flowersTotal + wrappingTotal + noteTotal + deliveryPrice;
+
+  document.getElementById('sum-flowers').textContent  = Math.round(flowersTotal);
+  document.getElementById('sum-wrapping').textContent = Math.round(wrappingTotal);
+  document.getElementById('sum-note').textContent     = Math.round(noteTotal);
+  document.getElementById('sum-delivery').textContent = Math.round(deliveryPrice);
+  document.getElementById('sum-total').textContent    = Math.round(total);
+  document.getElementById('note-price-row').classList.toggle('hidden', noteTotal === 0);
+}
+
+// ---------------------------------------------------------------------------
+// Add / duplicate / remove bouquets
+// ---------------------------------------------------------------------------
+function getBouquetCount() {
+  return parseInt(document.getElementById('bouquet-count').value) || 1;
+}
+function setBouquetCount(n) {
+  document.getElementById('bouquet-count').value = n;
+}
+
+function makeBouquetSection(idx, copyFrom) {
+  const section = document.createElement('div');
+  section.className = 'bouquet-section rounded-2xl border-2 border-pink-100 bg-white p-4 mb-4';
+  section.dataset.bouquetIndex = idx;
+
+  section.innerHTML =
+    `<div class="flex items-center justify-between mb-3">` +
+      `<h3 class="bouquet-title text-sm font-bold text-pink-700 uppercase tracking-wide">Букет ${idx + 1}</h3>` +
+      `<div class="flex gap-1.5">` +
+        `<button type="button" onclick="duplicateBouquet(this)"` +
+                ` class="text-xs px-2.5 py-1 rounded-lg border border-blue-200` +
+                         ` text-blue-500 bg-white active:bg-blue-50 transition">Копировать</button>` +
+        `<button type="button" onclick="removeBouquet(this)"` +
+                ` class="remove-bouquet text-xs px-2.5 py-1 rounded-lg border border-red-200` +
+                         ` text-red-400 bg-white active:bg-red-50 transition">Удалить</button>` +
+      `</div>` +
+    `</div>` +
+    `<div class="variety-rows-container mb-2">${makeVarietyRow(idx)}</div>` +
+    `<button type="button" onclick="addVarietyRow(this.closest('.bouquet-section'))"` +
+            ` class="w-full py-2.5 rounded-xl border-2 border-dashed border-pink-200` +
+                    ` text-pink-500 font-medium text-sm mb-4 active:bg-pink-50 transition">+ Добавить сорт</button>` +
+    `<div class="mb-3"><label class="block text-sm font-semibold text-gray-700 mb-1.5">Упаковка</label>` +
+      `<div class="relative"><select name="b_wrapping_${idx}" class="bouquet-wrapping w-full rounded-xl border border-gray-300 text-base px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-pink-400 appearance-none pr-10" onchange="onWrappingChange(this)">` +
+        WRAPPING_HTML +
+      `</select><div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">${chevronSVG}</div></div></div>` +
+    `<div class="mb-3"><label class="block text-sm font-semibold text-gray-700 mb-1.5">Лента <span class="text-red-500">*</span></label>` +
+      `<div class="relative"><select name="b_ribbon_${idx}" class="bouquet-ribbon w-full rounded-xl border border-gray-300 text-base px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-pink-400 appearance-none pr-10">` +
+        RIBBON_HTML +
+      `</select><div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">${chevronSVG}</div></div></div>` +
+    `<div class="bouquet-tissue-section mb-4"><label class="block text-sm font-semibold text-gray-700 mb-1.5">Тишью</label>` +
+      `<div class="relative"><select name="b_tissue_${idx}" class="bouquet-tissue w-full rounded-xl border border-gray-300 text-base px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-pink-400 appearance-none pr-10" onchange="recalcTotal()">` +
+        TISSUE_HTML +
+      `</select><div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">${chevronSVG}</div></div></div>` +
+    `<div class="bouquet-note-section"><label class="flex items-center gap-3 cursor-pointer select-none">` +
+      `<input type="checkbox" name="b_has_note_${idx}" value="1" class="bouquet-has-note w-5 h-5 rounded accent-pink-600 shrink-0" onchange="toggleNote(this)">` +
+      `<span class="text-sm font-semibold text-gray-700">Добавить записку</span>` +
+      `<span class="text-xs text-gray-400 ml-auto">+${Math.round(SETTINGS.note_price || 30)} ₴</span>` +
+    `</label><div class="bouquet-note-fields hidden mt-3">` +
+      `<textarea name="b_note_${idx}" rows="3" placeholder="Текст записки…" class="w-full rounded-xl border border-gray-300 text-base px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-pink-400 resize-none"></textarea>` +
+    `</div></div>`;
+
+  if (copyFrom) {
+    const srcRows = copyFrom.querySelectorAll('.variety-row');
+    const dstContainer = section.querySelector('.variety-rows-container');
+    dstContainer.innerHTML = '';
+    srcRows.forEach(srcRow => {
+      const srcSelect = srcRow.querySelector('select[name^="variety_id_"]');
+      const srcQty    = srcRow.querySelector('input[name^="quantity_"]');
+      const newRowDiv = document.createElement('div');
+      newRowDiv.innerHTML = makeVarietyRow(idx);
+      const newRow = newRowDiv.firstElementChild;
+      if (srcSelect) newRow.querySelector('select[name^="variety_id_"]').value = srcSelect.value;
+      if (srcQty)    newRow.querySelector('input[name^="quantity_"]').value    = srcQty.value;
+      dstContainer.appendChild(newRow);
+    });
+    updateRemoveButtons(section);
+
+    const srcWrap = copyFrom.querySelector('.bouquet-wrapping');
+    const srcRib  = copyFrom.querySelector('.bouquet-ribbon');
+    const srcTis  = copyFrom.querySelector('.bouquet-tissue');
+    if (srcWrap) section.querySelector('.bouquet-wrapping').value = srcWrap.value;
+    if (srcRib)  section.querySelector('.bouquet-ribbon').value   = srcRib.value;
+    if (srcTis)  section.querySelector('.bouquet-tissue').value   = srcTis.value;
+
+    const srcNoteCb   = copyFrom.querySelector('.bouquet-has-note');
+    const srcNoteText = copyFrom.querySelector('[name^="b_note_"]');
+    const dstNoteCb   = section.querySelector('.bouquet-has-note');
+    const dstNoteFields = section.querySelector('.bouquet-note-fields');
+    const dstNoteText = section.querySelector('[name^="b_note_"]');
+    if (srcNoteCb && srcNoteCb.checked) {
+      dstNoteCb.checked = true;
+      dstNoteFields.classList.remove('hidden');
+      if (srcNoteText && dstNoteText) dstNoteText.value = srcNoteText.value;
+    }
+    onWrappingChange(section.querySelector('.bouquet-wrapping'));
+  }
+  return section;
+}
+
+function addBouquet() {
+  const count = getBouquetCount();
+  const section = makeBouquetSection(count);
+  document.getElementById('bouquets-container').appendChild(section);
+  setBouquetCount(count + 1);
+  updateGlobalRemoveButtons();
+  recalcTotal();
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function duplicateBouquet(btn) {
+  const src = btn.closest('.bouquet-section');
+  const count = getBouquetCount();
+  const section = makeBouquetSection(count, src);
+  document.getElementById('bouquets-container').appendChild(section);
+  setBouquetCount(count + 1);
+  updateGlobalRemoveButtons();
+  recalcTotal();
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function removeBouquet(btn) {
+  const sections = document.querySelectorAll('.bouquet-section');
+  if (sections.length <= 1) return;
+  btn.closest('.bouquet-section').remove();
+  renumberBouquets();
+  updateGlobalRemoveButtons();
+  checkAllRowsStock();
+  recalcTotal();
+}
+
+function renumberBouquets() {
+  document.querySelectorAll('.bouquet-section').forEach((section, i) => {
+    section.dataset.bouquetIndex = i;
+    section.querySelector('.bouquet-title').textContent = `Букет ${i + 1}`;
+    section.querySelectorAll('select[name^="variety_id_"]').forEach(el => { el.name = `variety_id_${i}[]`; });
+    section.querySelectorAll('input[name^="quantity_"]').forEach(el => { el.name = `quantity_${i}[]`; });
+    const wrapSel = section.querySelector('.bouquet-wrapping');
+    const ribSel  = section.querySelector('.bouquet-ribbon');
+    const tisSel  = section.querySelector('.bouquet-tissue');
+    const noteCb  = section.querySelector('.bouquet-has-note');
+    const noteTxt = section.querySelector('[name^="b_note_"]');
+    if (wrapSel) wrapSel.name = `b_wrapping_${i}`;
+    if (ribSel)  ribSel.name  = `b_ribbon_${i}`;
+    if (tisSel)  tisSel.name  = `b_tissue_${i}`;
+    if (noteCb)  noteCb.name  = `b_has_note_${i}`;
+    if (noteTxt) noteTxt.name = `b_note_${i}`;
+  });
+  setBouquetCount(document.querySelectorAll('.bouquet-section').length);
+}
+
+function updateGlobalRemoveButtons() {
+  const sections = document.querySelectorAll('.bouquet-section');
+  const show = sections.length > 1;
+  sections.forEach(s => {
+    const btn = s.querySelector('.remove-bouquet');
+    if (btn) btn.classList.toggle('hidden', !show);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.bouquet-section').forEach(section => {
+  const wrapSel = section.querySelector('.bouquet-wrapping');
+  if (wrapSel) onWrappingChange(wrapSel);
+  updateRemoveButtons(section);
+});
+updateGlobalRemoveButtons();
+checkAllRowsStock();
+recalcTotal();
+</script>
+{% endblock %}

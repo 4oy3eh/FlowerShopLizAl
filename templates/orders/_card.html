@@ -22,13 +22,14 @@
     </span>
   </div>
 
-  {# ── Recipient ── #}
+  {# ── Sender → Recipient ── #}
   <div class="text-sm text-gray-800 mb-1">
     {% if o['recipient_name'] %}
-      <span class="font-medium">→ {{ o['recipient_name'] }}</span>
+      <span class="font-medium">{{ o['customer_name'] or 'Аноним' }} → {{ o['recipient_name'] }}</span>
       <span class="text-gray-400 ml-1 text-xs">{{ o['recipient_phone'] }}</span>
     {% else %}
-      <span class="text-amber-600 text-xs font-medium">⚠ Получатель не указан</span>
+      <span class="font-medium text-gray-600">{{ o['customer_name'] or 'Аноним' }}</span>
+      <span class="text-amber-600 text-xs font-medium ml-1">⚠ Получатель не указан</span>
     {% endif %}
   </div>
 

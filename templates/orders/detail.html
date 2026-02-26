@@ -51,6 +51,13 @@
 {% if order['order_status'] in CANCEL_ALLOWED %}
 <div class="mb-4">
 
+  {# Edit order button #}
+  <a href="/orders/{{ order['id'] }}/edit"
+     class="block w-full py-2.5 mb-2 rounded-2xl border border-blue-200 text-blue-600
+            text-sm font-medium bg-white text-center active:bg-blue-50 transition">
+    ✏ Изменить заказ
+  </a>
+
   {# Step 1 — single "cancel" trigger button #}
   <button type="button" id="cancel-trigger"
           onclick="this.classList.add('hidden');
@@ -147,11 +154,10 @@
                       bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
       </div>
       <div class="mb-3">
-        <label class="block text-xs text-gray-500 mb-1">Телефон получателя</label>
-        <input type="tel" name="recipient_phone"
+        <label class="block text-xs text-gray-500 mb-1">Телефон или Instagram получателя</label>
+        <input type="text" name="recipient_phone"
                value="{{ order['recipient_phone'] }}"
-               placeholder="+380" inputmode="tel"
-               oninput="formatPhoneDet(this)"
+               placeholder="+380 или @instagram"
                class="w-full rounded-xl border border-gray-200 text-base px-3 py-2.5
                       bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-400">
       </div>

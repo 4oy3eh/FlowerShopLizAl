@@ -27,6 +27,7 @@ from services.order_service import (
     advance_status,
     cancel_order,
     create_order,
+    update_order,
     update_recipient,
 )
 
@@ -197,8 +198,11 @@ def customer_lookup():
     """
     phone = request.args.get('customer_phone', '').strip()
 
-    # Require a full Ukrainian number (+380XXXXXXXXX = 13 chars)
-    if len(phone) < 13:
+    # Require at least a minimal contact value before querying
+    if phone.startswith('@'):
+        if len(phone) < 3:   # @ab minimum
+            return ''
+    elif len(phone) < 13:    # full +380XXXXXXXXX
         return ''
 
     db = get_db()
@@ -662,3 +666,206 @@ def print_assembly(order_id):
 
     return render_template('orders/print_assembly.html', order=order, items=items,
                            bouquets=bouquets)
+
+
+# ---------------------------------------------------------------------------
+# GET /orders/<id>/edit  — full order edit form
+# ---------------------------------------------------------------------------
+
+@orders_bp.route('/<int:order_id>/edit')
+def edit_order(order_id):
+    """Render the full order edit form (allowed for CANCEL_ALLOWED statuses).
+
+    Loads varieties with effective stock (adds back current order's reserved
+    quantities so the user sees the correct available amount while editing).
+
+    Args:
+        order_id: Primary key of the order to edit.
+
+    Returns:
+        Rendered ``orders/edit.html`` template, or redirect on error.
+    """
+    db = get_db()
+
+    order = db.execute(
+        '''SELECT o.*,
+                  c.name  AS customer_name, c.phone AS customer_phone,
+                  w.name  AS wrapping_name,
+                  r.name  AS ribbon_name
+             FROM orders o
+             JOIN customers c            ON o.customer_id     = c.id
+             LEFT JOIN wrapping_options w ON o.wrapping_id    = w.id
+             JOIN ribbon_colors r        ON o.ribbon_color_id = r.id
+            WHERE o.id = ?''',
+        (order_id,)
+    ).fetchone()
+
+    if order is None:
+        flash('Заказ не найден', 'error')
+        return redirect('/orders')
+
+    if order['order_status'] not in CANCEL_ALLOWED:
+        flash('Заказ нельзя редактировать в текущем статусе', 'error')
+        return redirect(f'/orders/{order_id}')
+
+    # Current order's reserved quantities (to show correct available stock)
+    order_qty = {}
+    for r in db.execute(
+        'SELECT variety_id, SUM(quantity) AS qty FROM order_items WHERE order_id = ? GROUP BY variety_id',
+        (order_id,)
+    ).fetchall():
+        order_qty[r['variety_id']] = r['qty']
+
+    # Varieties: add back reserved qty so the form shows realistic availability
+    varieties = []
+    for r in db.execute(
+        '''SELECT id, name, color, current_sell_price, stock_available
+             FROM tulip_varieties
+            WHERE is_active = 1
+            ORDER BY name'''
+    ).fetchall():
+        vd = dict(r)
+        vd['stock_available'] = vd['stock_available'] + order_qty.get(vd['id'], 0)
+        varieties.append(vd)
+
+    wrapping = [dict(r) for r in db.execute(
+        '''SELECT id, name, wrapping_type, current_price
+             FROM wrapping_options
+            WHERE is_active = 1
+            ORDER BY CASE wrapping_type
+                       WHEN 'florist'  THEN 0
+                       WHEN 'замшевая' THEN 1
+                       WHEN 'каффин'   THEN 2
+                       WHEN 'пленка'   THEN 3
+                       ELSE 4 END, name'''
+    ).fetchall()]
+
+    ribbons = [dict(r) for r in db.execute(
+        '''SELECT id, name FROM ribbon_colors WHERE is_active = 1
+           ORDER BY CASE WHEN name = \'Выбор флориста\' THEN 0 ELSE 1 END, name'''
+    ).fetchall()]
+
+    settings = {row['key']: row['value']
+                for row in db.execute('SELECT key, value FROM system_settings').fetchall()}
+
+    tissue_options = [
+        ('florist', 'Выбор флориста'),
+        ('none',    'Без тишью'),
+        ('white',   'Белая'),
+        ('cream',   'Молочная'),
+        ('black',   'Чёрная'),
+        ('pink',    'Розовая'),
+    ]
+
+    # Load bouquets with items
+    raw_bouquets = db.execute(
+        '''SELECT ob.*, wo.name AS wrapping_name, rc.name AS ribbon_name
+             FROM order_bouquets ob
+             LEFT JOIN wrapping_options wo ON ob.wrapping_id     = wo.id
+             LEFT JOIN ribbon_colors    rc ON ob.ribbon_color_id = rc.id
+            WHERE ob.order_id = ?
+            ORDER BY ob.position''',
+        (order_id,)
+    ).fetchall()
+
+    bouquets = []
+    for b in raw_bouquets:
+        bd = dict(b)
+        bd['items'] = db.execute(
+            '''SELECT oi.*, tv.name AS variety_name
+                 FROM order_items oi
+                 JOIN tulip_varieties tv ON oi.variety_id = tv.id
+                WHERE oi.bouquet_id = ?
+                ORDER BY oi.id''',
+            (b['id'],)
+        ).fetchall()
+        bouquets.append(bd)
+
+    # Legacy fallback: no order_bouquets rows
+    if not bouquets:
+        items = db.execute(
+            '''SELECT oi.*, tv.name AS variety_name
+                 FROM order_items oi
+                 JOIN tulip_varieties tv ON oi.variety_id = tv.id
+                WHERE oi.order_id = ? AND oi.bouquet_id IS NULL
+                ORDER BY oi.id''',
+            (order_id,)
+        ).fetchall()
+        if items:
+            bouquets = [{
+                'id':              None,
+                'position':        1,
+                'wrapping_id':     order['wrapping_id'],
+                'ribbon_color_id': order['ribbon_color_id'],
+                'tissue':          order['tissue'],
+                'has_note':        order['has_note'],
+                'note_text':       order['note_text'],
+                'wrapping_name':   order['wrapping_name'],
+                'ribbon_name':     order['ribbon_name'],
+                'items':           items,
+            }]
+
+    return render_template(
+        'orders/edit.html',
+        order=order,
+        bouquets=bouquets,
+        varieties=varieties,
+        wrapping=wrapping,
+        ribbons=ribbons,
+        settings=settings,
+        tissue_options=tissue_options,
+        delivery_dates=DELIVERY_DATES,
+        time_slots=TIME_SLOTS,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /orders/<id>/update  — save full order edit
+# ---------------------------------------------------------------------------
+
+@orders_bp.route('/<int:order_id>/update', methods=['POST'])
+def update_order_route(order_id):
+    """Process the full order edit form submission.
+
+    Args:
+        order_id: Primary key of the order to update.
+
+    Returns:
+        Redirect to order detail on success, or back to edit form on error.
+    """
+    try:
+        bouquet_count = max(1, int(request.form.get('bouquet_count', '1') or '1'))
+    except (ValueError, TypeError):
+        bouquet_count = 1
+
+    bouquets = []
+    for i in range(bouquet_count):
+        bouquets.append({
+            'variety_ids':     request.form.getlist(f'variety_id_{i}[]'),
+            'quantities':      request.form.getlist(f'quantity_{i}[]'),
+            'wrapping_id':     request.form.get(f'b_wrapping_{i}', '').strip() or None,
+            'ribbon_color_id': request.form.get(f'b_ribbon_{i}', '').strip(),
+            'tissue':          request.form.get(f'b_tissue_{i}', 'florist').strip(),
+            'has_note':        bool(request.form.get(f'b_has_note_{i}')),
+            'note_text':       (request.form.get(f'b_note_{i}') or '').strip(),
+        })
+
+    data = {
+        'customer_phone':   request.form.get('customer_phone', '').strip(),
+        'customer_name':    request.form.get('customer_name', '').strip(),
+        'recipient_name':   request.form.get('recipient_name', '').strip(),
+        'recipient_phone':  request.form.get('recipient_phone', '').strip(),
+        'is_pickup':        request.form.get('is_pickup', '0'),
+        'delivery_address': request.form.get('delivery_address', '').strip(),
+        'delivery_date':    request.form.get('delivery_date', DEFAULT_DELIVERY_DATE).strip(),
+        'desired_time':     request.form.get('desired_time', '').strip(),
+        'bouquets':         bouquets,
+    }
+
+    try:
+        update_order(get_db(), order_id, data)
+        flash('Заказ обновлён!', 'success')
+        return redirect(f'/orders/{order_id}')
+    except ValueError as exc:
+        flash(str(exc), 'error')
+        return redirect(f'/orders/{order_id}/edit')
