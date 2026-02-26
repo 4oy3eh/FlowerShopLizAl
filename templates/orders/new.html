@@ -348,6 +348,7 @@
                       bg-white focus:outline-none focus:ring-2 focus:ring-pink-400
                       appearance-none pr-10"
                       onchange="onWrappingChange(this)">
+                <option value="" data-price="0" data-type="" selected>Без упаковки</option>
                 {% set ns = namespace(prev_type='') %}
                 {% for w in wrapping %}
                   {% if w.wrapping_type != ns.prev_type %}
@@ -358,8 +359,7 @@
                     {% set ns.prev_type = w.wrapping_type %}
                   {% endif %}
                   <option value="{{ w.id }}" data-price="{{ w.current_price }}"
-                          data-type="{{ w.wrapping_type }}"
-                          {% if loop.first %}selected{% endif %}>
+                          data-type="{{ w.wrapping_type }}">
                     {%- if w.wrapping_type == 'florist' -%}
                       Выбор флориста
                     {%- else -%}
@@ -413,7 +413,7 @@
                       appearance-none pr-10"
                       onchange="recalcTotal()">
                 {% for val, label in tissue_options %}
-                <option value="{{ val }}" {% if loop.first %}selected{% endif %}>{{ label }}</option>
+                <option value="{{ val }}" {% if val == 'none' %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
               <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
@@ -549,7 +549,7 @@ const WRAPPING_HTML = (function() {
   // Pre-build wrapping <option> HTML from server data (used when cloning bouquets)
   const rows = {{ wrapping | tojson }};
   let prevType = '';
-  let html = '';
+  let html = '<option value="" data-price="0" data-type="" selected>Без упаковки</option>';
   rows.forEach(w => {
     if (w.wrapping_type !== prevType) {
       if (prevType && prevType !== 'florist' && prevType !== 'слюда') html += '</optgroup>';
@@ -576,7 +576,7 @@ const TISSUE_HTML = (function() {
     ['florist','Выбор флориста'],['none','Без тишью'],
     ['white','Белая'],['cream','Молочная'],['black','Чёрная'],['pink','Розовая']
   ];
-  return opts.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+  return opts.map(([v,l]) => `<option value="${v}"${v === 'none' ? ' selected' : ''}>${l}</option>`).join('');
 })();
 const TISSUE_LABELS = {
   florist: 'Выбор флориста', none: 'Без тишью',
