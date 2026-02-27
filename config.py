@@ -16,7 +16,13 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-DATABASE = os.environ.get('DATABASE_PATH') or os.path.join(BASE_DIR, 'data', 'flower_shop.db')
+# On Render the persistent disk is always mounted at /data — use it directly
+# so the DB survives deploys even if DATABASE_PATH env var is not set.
+# Locally (no RENDER env) fall back to ./data/flower_shop.db.
+if os.environ.get('RENDER'):
+    DATABASE = os.environ.get('DATABASE_PATH', '/data/flower_shop.db')
+else:
+    DATABASE = os.environ.get('DATABASE_PATH') or os.path.join(BASE_DIR, 'data', 'flower_shop.db')
 DEBUG = os.environ.get('FLASK_DEBUG', 'true').lower() == 'true'
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-flower-shop')
 

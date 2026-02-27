@@ -13,7 +13,6 @@ the local network (or via an ngrok tunnel).
 
 import os
 import shutil
-import urllib.request
 from datetime import datetime, timedelta
 
 from flask import Flask, render_template
@@ -58,21 +57,6 @@ def _run_backup(db_path: str) -> None:
                 pass
 
 
-def _self_ping(url: str) -> None:
-    """Send a GET request to the app's own URL to prevent idle sleep.
-
-    Used on free-tier cloud hosts (e.g. Render) that spin down after
-    ~15 minutes of inactivity.  Called by APScheduler every ~9 min ±2 min.
-
-    Args:
-        url: Public URL to ping, e.g. ``https://myapp.onrender.com``.
-    """
-    try:
-        urllib.request.urlopen(url, timeout=10)
-    except Exception:
-        pass  # ignore errors — next ping will retry
-
-
 def _start_scheduler(db_path: str) -> None:
     """Start the APScheduler background job that backs up the database hourly.
 
@@ -101,21 +85,6 @@ def _start_scheduler(db_path: str) -> None:
         id='db_backup',
         replace_existing=True,
     )
-
-    # Self-ping to keep free-tier cloud hosts (Render etc.) awake.
-    # Only activates when RENDER_EXTERNAL_URL is set by the hosting platform.
-    render_url = os.environ.get('RENDER_EXTERNAL_URL', '').strip()
-    if render_url:
-        scheduler.add_job(
-            _self_ping,
-            trigger='interval',
-            minutes=9,
-            jitter=120,       # ±2 minutes random drift
-            args=[render_url],
-            id='self_ping',
-            replace_existing=True,
-        )
-        print(f'[ping] Self-ping enabled → {render_url}')
 
     scheduler.start()
     print('[backup] Hourly backup scheduler started.')
