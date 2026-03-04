@@ -10,7 +10,7 @@ Endpoints:
     POST /inventory/varieties/<id>/update  — save variety changes
 """
 
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, make_response, render_template, request, redirect, url_for
 
 from config import DELIVERY_DATES, TIME_SLOTS
 from database.db import get_db
@@ -270,6 +270,8 @@ def update_variety(variety_id):
     error = None
     new_price = None
     new_total = None
+    new_name  = request.form.get('name', '').strip()
+    new_color = request.form.get('color', '').strip()
     try:
         new_price = float(request.form['current_sell_price'])
         new_total = int(request.form['stock_total'])
@@ -280,7 +282,9 @@ def update_variety(variety_id):
     if error is None:
         reserved = _reserved_qty(variety_id)
 
-        if new_price <= 0:
+        if not new_name:
+            error = 'Название не может быть пустым'
+        elif new_price <= 0:
             error = 'Цена должна быть больше 0'
         elif new_total < 0:
             error = 'Количество не может быть отрицательным'
@@ -318,11 +322,13 @@ def update_variety(variety_id):
 
     db.execute(
         """UPDATE tulip_varieties
-              SET current_sell_price = ?,
+              SET name               = ?,
+                  color              = ?,
+                  current_sell_price = ?,
                   stock_total        = ?,
                   stock_available    = ?
             WHERE id = ?""",
-        (new_price, new_total, new_available, variety_id),
+        (new_name, new_color, new_price, new_total, new_available, variety_id),
     )
     db.commit()
 
@@ -330,3 +336,66 @@ def update_variety(variety_id):
         'SELECT * FROM tulip_varieties WHERE id = ?', (variety_id,)
     ).fetchone()
     return render_template('inventory/_row.html', v=updated)
+
+
+# ---------------------------------------------------------------------------
+# GET  /inventory/varieties/new   — add-variety form partial
+# POST /inventory/varieties/add   — insert new variety
+# ---------------------------------------------------------------------------
+
+@inventory_bp.route('/varieties/new')
+def new_variety_form():
+    """HTMX partial: render the form for adding a new variety.
+
+    Returns:
+        Rendered ``inventory/_add_row.html`` partial.
+    """
+    return render_template('inventory/_add_row.html')
+
+
+@inventory_bp.route('/varieties/add', methods=['POST'])
+def add_variety():
+    """Insert a new tulip variety and redirect to the inventory page.
+
+    Validates that name and numeric fields are provided, then inserts the
+    row with ``is_active = 1`` and ``stock_available = stock_total``.
+
+    Returns:
+        Redirect to ``/inventory/`` on success, or
+        ``inventory/_add_row.html`` with an error on validation failure.
+    """
+    error   = None
+    name    = request.form.get('name', '').strip()
+    color   = request.form.get('color', '').strip()
+    try:
+        purchase_price = float(request.form['purchase_price'])
+        sell_price     = float(request.form['current_sell_price'])
+        stock_total    = int(request.form['stock_total'])
+    except (ValueError, KeyError):
+        error = 'Введите числовые значения'
+
+    if error is None:
+        if not name:
+            error = 'Название не может быть пустым'
+        elif purchase_price <= 0 or sell_price <= 0:
+            error = 'Цены должны быть больше 0'
+        elif stock_total < 0:
+            error = 'Количество не может быть отрицательным'
+
+    if error:
+        return render_template('inventory/_add_row.html', error=error,
+                               form=request.form)
+
+    db = get_db()
+    db.execute(
+        """INSERT INTO tulip_varieties
+               (name, color, purchase_price, current_sell_price,
+                stock_total, stock_available, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, 1)""",
+        (name, color, purchase_price, sell_price, stock_total, stock_total),
+    )
+    db.commit()
+    # HX-Redirect causes HTMX to do a full page navigation instead of a partial swap
+    response = make_response('', 204)
+    response.headers['HX-Redirect'] = url_for('inventory.index')
+    return response

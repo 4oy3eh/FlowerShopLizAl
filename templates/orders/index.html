@@ -72,6 +72,25 @@
   {# Hidden status field (updated by buttons above via JS) #}
   <input type="hidden" name="status" id="status-hidden" value="{{ status_filter }}">
 
+  {# Variety filter tabs #}
+  {% if varieties %}
+  <div class="flex gap-1.5 overflow-x-auto pb-2 mb-3 scrollbar-none">
+    <button type="button" name="variety" value=""
+            class="variety-tab shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition
+                   {% if not variety_filter %}bg-pink-600 text-white{% else %}bg-white border border-gray-200 text-gray-600{% endif %}">
+      Все цветы
+    </button>
+    {% for v in varieties %}
+    <button type="button" name="variety" value="{{ v['id'] }}"
+            class="variety-tab shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition
+                   {% if variety_filter == v['id']|string %}bg-pink-600 text-white{% else %}bg-white border border-gray-200 text-gray-600{% endif %}">
+      {{ v['name'] }}
+    </button>
+    {% endfor %}
+  </div>
+  <input type="hidden" name="variety" id="variety-hidden" value="{{ variety_filter }}">
+  {% endif %}
+
   {# Search #}
   <input type="search" name="q" value="{{ q }}"
          placeholder="Поиск по номеру, имени, телефону…"
@@ -105,6 +124,14 @@
     btn.addEventListener('click', function(e) {
       e.preventDefault();
       document.getElementById('status-hidden').value = this.value;
+      htmx.trigger('#filter-form', 'submit');
+    });
+  });
+
+  // Variety tab buttons
+  document.querySelectorAll('.variety-tab').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.getElementById('variety-hidden').value = this.value;
       htmx.trigger('#filter-form', 'submit');
     });
   });

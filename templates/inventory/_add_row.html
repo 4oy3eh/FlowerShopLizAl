@@ -1,0 +1,116 @@
+{#
+  Form for adding a new tulip variety.
+  Used by:
+    GET  /inventory/varieties/new
+    POST /inventory/varieties/add  (on validation error)
+
+  Expects:
+    error — str | None
+    form  — ImmutableMultiDict | None  (repopulates fields on error)
+#}
+
+<div id="add-variety-form"
+     class="bg-white rounded-2xl p-4 shadow-sm border-2 border-pink-300 mt-3">
+
+  <div class="font-semibold text-gray-900 mb-4">Новый сорт</div>
+
+  {% if error %}
+  <div class="mb-3 px-3 py-2 rounded-xl bg-red-50 border border-red-200
+              text-sm text-red-700">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <form
+    hx-post="/inventory/varieties/add"
+    hx-target="#add-variety-form"
+    hx-swap="outerHTML">
+
+    <div class="space-y-3">
+
+      {# Name #}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Название</label>
+        <input type="text" name="name"
+               value="{{ form.name if form else '' }}"
+               required
+               placeholder="Например: White Flag"
+               class="block w-full rounded-xl border border-gray-300 px-3 py-2.5
+                      text-sm text-gray-900
+                      focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+      </div>
+
+      {# Color #}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Цвет</label>
+        <input type="text" name="color"
+               value="{{ form.color if form else '' }}"
+               placeholder="Например: белый"
+               class="block w-full rounded-xl border border-gray-300 px-3 py-2.5
+                      text-sm text-gray-900
+                      focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+      </div>
+
+      {# Sell price #}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Цена продажи, ₴</label>
+        <div class="relative">
+          <input type="number" name="current_sell_price"
+                 value="{{ form.current_sell_price if form else '' }}"
+                 min="1" step="1" required inputmode="numeric"
+                 class="block w-full rounded-xl border border-gray-300 px-3 py-2.5 pr-8
+                        text-sm text-gray-900
+                        focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₴</span>
+        </div>
+      </div>
+
+      {# Purchase price #}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Закупочная цена, ₴</label>
+        <div class="relative">
+          <input type="number" name="purchase_price"
+                 value="{{ form.purchase_price if form else '' }}"
+                 min="1" step="1" required inputmode="numeric"
+                 class="block w-full rounded-xl border border-gray-300 px-3 py-2.5 pr-8
+                        text-sm text-gray-900
+                        focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₴</span>
+        </div>
+      </div>
+
+      {# Stock total #}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Количество, шт.</label>
+        <div class="relative">
+          <input type="number" name="stock_total"
+                 value="{{ form.stock_total if form else '0' }}"
+                 min="0" step="1" required inputmode="numeric"
+                 class="block w-full rounded-xl border border-gray-300 px-3 py-2.5 pr-12
+                        text-sm text-gray-900
+                        focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">шт.</span>
+        </div>
+      </div>
+
+    </div>
+
+    {# Buttons #}
+    <div class="flex gap-2 mt-4 justify-end">
+      <button
+        type="button"
+        onclick="document.getElementById('add-variety-form').remove()"
+        class="px-4 py-2 rounded-xl text-sm font-medium text-gray-600
+               hover:bg-gray-100 transition active:bg-gray-200">
+        Отмена
+      </button>
+      <button
+        type="submit"
+        class="px-4 py-2 rounded-xl text-sm font-medium
+               bg-pink-600 text-white hover:bg-pink-700 transition active:bg-pink-800">
+        Добавить
+      </button>
+    </div>
+
+  </form>
+</div>

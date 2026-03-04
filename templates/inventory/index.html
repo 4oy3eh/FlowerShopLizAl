@@ -49,6 +49,18 @@
   </a>
 
   {# ── Varieties list ─────────────────────────────────────────── #}
+  <div class="flex items-center justify-between mb-1">
+    <h2 class="text-sm font-semibold text-gray-600">Сорта</h2>
+    <button
+      hx-get="/inventory/varieties/new"
+      hx-target="#varieties-list"
+      hx-swap="afterend"
+      class="text-xs font-medium px-3 py-1.5 rounded-xl
+             bg-pink-600 text-white hover:bg-pink-700 transition active:bg-pink-800">
+      + Добавить сорт
+    </button>
+  </div>
+
   <div class="space-y-3" id="varieties-list">
     {% for v in varieties %}
       {% include 'inventory/_row.html' %}

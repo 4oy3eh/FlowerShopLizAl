@@ -294,7 +294,7 @@ def _date_counts(db) -> dict:
     return {row['delivery_date']: row['cnt'] for row in rows}
 
 
-def _fetch_orders(db, status_filter='', q='', date_filter=''):
+def _fetch_orders(db, status_filter='', q='', date_filter='', variety_filter=''):
     """Build and execute the order list query with optional filters.
 
     Args:
@@ -305,6 +305,8 @@ def _fetch_orders(db, status_filter='', q='', date_filter=''):
             ``recipient_name``, and ``recipient_phone``.
         date_filter: If non-empty, restrict results to this
             ``delivery_date`` value (e.g. ``'2025-03-08'``).
+        variety_filter: If non-empty, restrict to orders that contain this
+            variety id in their items.
 
     Returns:
         List of ``sqlite3.Row`` objects ordered by ``created_at DESC``.
@@ -326,6 +328,13 @@ def _fetch_orders(db, status_filter='', q='', date_filter=''):
             '(o.order_number LIKE ? OR o.recipient_name LIKE ? OR o.recipient_phone LIKE ?)'
         )
         params.extend([like, like, like])
+
+    if variety_filter:
+        where.append(
+            'EXISTS (SELECT 1 FROM order_items oi'
+            ' WHERE oi.order_id = o.id AND oi.variety_id = ?)'
+        )
+        params.append(variety_filter)
 
     sql = f'''
         SELECT o.*,
@@ -353,20 +362,26 @@ def order_list():
     Returns:
         Rendered ``orders/index.html`` template.
     """
-    status_filter = request.args.get('status', '').strip()
-    date_filter   = request.args.get('date', '').strip()
-    q             = request.args.get('q', '').strip()
-    db            = get_db()
-    date_counts   = _date_counts(db)
-    orders        = _fetch_orders(db, status_filter, q, date_filter)
+    status_filter  = request.args.get('status', '').strip()
+    date_filter    = request.args.get('date', '').strip()
+    variety_filter = request.args.get('variety', '').strip()
+    q              = request.args.get('q', '').strip()
+    db             = get_db()
+    date_counts    = _date_counts(db)
+    varieties      = db.execute(
+        'SELECT id, name, color FROM tulip_varieties WHERE is_active = 1 ORDER BY name'
+    ).fetchall()
+    orders = _fetch_orders(db, status_filter, q, date_filter, variety_filter)
     return render_template(
         'orders/index.html',
         orders=orders,
         status_filter=status_filter,
         date_filter=date_filter,
+        variety_filter=variety_filter,
         date_counts=date_counts,
         total_count=sum(date_counts.values()),
         delivery_dates=DELIVERY_DATES,
+        varieties=varieties,
         q=q,
         STATUS_LABELS=STATUS_LABELS,
     )
@@ -383,10 +398,11 @@ def order_list_partial():
     Returns:
         Rendered ``orders/_list.html`` partial template.
     """
-    status_filter = request.args.get('status', '').strip()
-    date_filter   = request.args.get('date', '').strip()
-    q             = request.args.get('q', '').strip()
-    orders        = _fetch_orders(get_db(), status_filter, q, date_filter)
+    status_filter  = request.args.get('status', '').strip()
+    date_filter    = request.args.get('date', '').strip()
+    variety_filter = request.args.get('variety', '').strip()
+    q              = request.args.get('q', '').strip()
+    orders         = _fetch_orders(get_db(), status_filter, q, date_filter, variety_filter)
     return render_template('orders/_list.html', orders=orders)
 
 

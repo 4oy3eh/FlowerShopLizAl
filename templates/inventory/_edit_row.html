@@ -35,6 +35,35 @@
 
     <div class="space-y-3">
 
+      {# Name #}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Название
+        </label>
+        <input
+          type="text"
+          name="name"
+          value="{{ v['name'] }}"
+          required
+          class="block w-full rounded-xl border border-gray-300 px-3 py-2.5
+                 text-sm text-gray-900
+                 focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+      </div>
+
+      {# Color #}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Цвет
+        </label>
+        <input
+          type="text"
+          name="color"
+          value="{{ v['color'] }}"
+          class="block w-full rounded-xl border border-gray-300 px-3 py-2.5
+                 text-sm text-gray-900
+                 focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+      </div>
+
       {# Sell price #}
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">
